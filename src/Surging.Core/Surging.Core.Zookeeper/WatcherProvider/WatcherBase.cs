@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace Surging.Core.Zookeeper.WatcherProvider
 {
-   public abstract class WatcherBase : Watcher
+   public abstract class WatcherBase
     {
         protected string Path { get; }
 
@@ -15,13 +15,5 @@ namespace Surging.Core.Zookeeper.WatcherProvider
             Path = path;
         }
 
-        public override async Task process(WatchedEvent watchedEvent)
-        {
-            if (watchedEvent.getState() != Event.KeeperState.SyncConnected || watchedEvent.getPath() != Path)
-                return;
-            await ProcessImpl(watchedEvent);
-        }
-
-        protected abstract Task ProcessImpl(WatchedEvent watchedEvent);
     }
 }

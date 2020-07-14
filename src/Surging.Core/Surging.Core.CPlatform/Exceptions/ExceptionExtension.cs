@@ -45,6 +45,10 @@ namespace Surging.Core.CPlatform.Exceptions
         public static StatusCode GetGetExceptionStatusCode(this Exception exception)
         {
             var statusCode = StatusCode.UnKnownError;
+            if (exception is TimeoutException || exception.InnerException is TimeoutException) 
+            {
+                return StatusCode.CommunicationError;
+            }
             if (exception is CPlatformException)
             {
                 statusCode = ((CPlatformException)exception).ExceptionCode;

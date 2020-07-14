@@ -20,7 +20,7 @@ namespace Surging.Core.CPlatform.Routing
 
         //ValueTask<ServiceRoute> GetLocalRouteByRegexPath(string path);
 
-        ValueTask<ServiceRoute> GetLocalRouteByPathOrRegexPath(string path);
+        //Task<ServiceRoute> GetLocalRouteByPathOrRegexPath(string path);
         /// <summary>
         /// 根据服务路由路径获取路由信息
         /// </summary>
@@ -30,7 +30,7 @@ namespace Surging.Core.CPlatform.Routing
 
         //ValueTask<ServiceRoute> GetRouteByRegexPath(string path);
 
-        ValueTask<ServiceRoute> GetRouteByPathOrRegexPath(string path);
+        Task<ServiceRoute> GetRouteByPathOrRegexPath(string path);
 
         /// <summary>
         /// 根据服务路由路径找到相关服务信息

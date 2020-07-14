@@ -3,6 +3,7 @@ using DotNetty.Transport.Channels;
 using Surging.Core.CPlatform.Messages;
 using Surging.Core.CPlatform.Transport;
 using Surging.Core.CPlatform.Transport.Codec;
+using Surging.Core.CPlatform.Transport.Implementation;
 using System;
 using System.Threading.Tasks;
 
@@ -75,6 +76,7 @@ namespace Surging.Core.DotNetty
         {
             var buffer = GetByteBuffer(message);
             await _channel.WriteAndFlushAsync(buffer);
+            //RpcContext.GetContext().ClearAttachment();
         }
 
         #endregion Implementation of IMessageSender
@@ -114,6 +116,7 @@ namespace Surging.Core.DotNetty
         {
             var buffer = GetByteBuffer(message);
             await _context.WriteAndFlushAsync(buffer);
+            //RpcContext.GetContext().ClearAttachment();
         }
 
         #endregion Implementation of IMessageSender

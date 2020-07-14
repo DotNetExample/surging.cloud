@@ -1,8 +1,5 @@
-﻿using Microsoft.AspNetCore.Authorization;
-using Surging.Core.ApiGateWay;
-using Surging.Core.ApiGateWay.OAuth;
+﻿using Surging.Core.ApiGateWay.OAuth;
 using Surging.Core.CPlatform;
-using Surging.Core.CPlatform.DependencyResolution;
 using Surging.Core.CPlatform.Filters.Implementation;
 using Surging.Core.CPlatform.Messages;
 using Surging.Core.CPlatform.Transport.Implementation;
@@ -13,10 +10,10 @@ using System.Threading.Tasks;
 using Autofac;
 using System;
 using Surging.Core.ProxyGenerator;
-using System.IO;
-using Surging.Core.CPlatform.Serialization;
 using System.Collections.Generic;
 using Surging.Core.CPlatform.Routing;
+using System.Linq;
+using System.Security.Claims;
 
 namespace Surging.Core.Stage.Filters
 {
@@ -46,50 +43,73 @@ namespace Surging.Core.Stage.Filters
             }
             else
             {
-                if (filterContext.Route != null && filterContext.Route.ServiceDescriptor.EnableAuthorization())
+                var token = filterContext.Context.Request.Headers["Authorization"];
+
+                if (filterContext.Route != null)
                 {
                     if (filterContext.Route.ServiceDescriptor.AuthType() == AuthorizationType.JWT.ToString())
                     {
-                        var author = filterContext.Context.Request.Headers["Authorization"];
-                        if (author.Count > 0)
+
+                        if (token.Any() && token.Count >= 1)
                         {
-                            var isSuccess = await _authorizationServerProvider.ValidateClientAuthentication(author);
-                            if (!isSuccess)
+                            var isSuccess = await _authorizationServerProvider.ValidateClientAuthentication(token);
+                            if (!isSuccess && filterContext.Route.ServiceDescriptor.EnableAuthorization())
                             {
-                                filterContext.Result = new HttpResultMessage<object> { IsSucceed = false, StatusCode = CPlatform.Exceptions.StatusCode.UnAuthentication, Message = "身份凭证(Token)不合法" };
+                                filterContext.Result = new HttpResultMessage<object> { IsSucceed = false, StatusCode = CPlatform.Exceptions.StatusCode.UnAuthentication, Message = "Token凭证不合法或登录超时" };
                             }
-                            else
+
+                            dynamic payload = _authorizationServerProvider.GetPayload(token);
+                            //RpcContext.GetContext().SetAttachment(Surging.Core.CPlatform.AppConfig.PayloadKey, payload);
+
+                            var userId = payload.userId ?? payload.UserId;
+                            var userName = payload.userName ?? payload.UserName;
+                            var claimsIdentity = new ClaimsIdentity();
+                            if (userId != null) 
                             {
-                               
-                                var payload = _authorizationServerProvider.GetPayload(author);
-                                RpcContext.GetContext().SetAttachment("payload", payload);
-            
-                                if (!gatewayAppConfig.AuthorizationRoutePath.IsNullOrEmpty())
-                                {
-                                    var rpcParams = new Dictionary<string, object>() {
+                                claimsIdentity.AddClaim(new Claim("userId",userId.ToString()));
+                            }
+                            if (userName != null) 
+                            {
+                                claimsIdentity.AddClaim(new Claim("userName", userName.ToString()));
+                            }
+                            filterContext.Context.User = new ClaimsPrincipal(claimsIdentity);
+
+                             if (!gatewayAppConfig.AuthorizationRoutePath.IsNullOrEmpty() && filterContext.Route.ServiceDescriptor.EnableAuthorization())
+                            {
+                                var rpcParams = new Dictionary<string, object>() {
                                         {  "serviceId", filterContext.Route.ServiceDescriptor.Id }
                                     };
-                                    var authorizationRoutePath = await _serviceRouteProvider.GetRouteByPathOrRegexPath(gatewayAppConfig.AuthorizationRoutePath);
-                                    if (authorizationRoutePath == null) {
-                                        filterContext.Result = new HttpResultMessage<object> { IsSucceed = false, StatusCode = CPlatform.Exceptions.StatusCode.RequestError, Message = "没有找到实现接口鉴权的WebApi的路由信息" };
-                                        return;
-                                    }
-                                    var isPermission = await _serviceProxyProvider.Invoke<bool>(rpcParams, gatewayAppConfig.AuthorizationRoutePath, gatewayAppConfig.AuthorizationServiceKey);
-                                    if (!isPermission)
-                                    {
-                                        var actionName = filterContext.Route.ServiceDescriptor.GroupName().IsNullOrEmpty() ? filterContext.Route.ServiceDescriptor.RoutePath : filterContext.Route.ServiceDescriptor.GroupName();
-                                        filterContext.Result = new HttpResultMessage<object> { IsSucceed = false, StatusCode = CPlatform.Exceptions.StatusCode.RequestError, Message = $"没有请求{actionName}的权限" };
-                                    }
+                                var authorizationRoutePath = await _serviceRouteProvider.GetRouteByPathOrRegexPath(gatewayAppConfig.AuthorizationRoutePath);
+                                if (authorizationRoutePath == null)
+                                {
+                                    filterContext.Result = new HttpResultMessage<object> { IsSucceed = false, StatusCode = CPlatform.Exceptions.StatusCode.RequestError, Message = "没有找到实现接口鉴权的WebApi的路由信息" };
+                                    return;
                                 }
-                               
+                                var isPermission = await _serviceProxyProvider.Invoke<bool>(rpcParams, gatewayAppConfig.AuthorizationRoutePath, gatewayAppConfig.AuthorizationServiceKey);
+                                if (!isPermission)
+                                {
+                                    var actionName = filterContext.Route.ServiceDescriptor.GroupName().IsNullOrEmpty() ? filterContext.Route.ServiceDescriptor.RoutePath : filterContext.Route.ServiceDescriptor.GroupName();
+                                    filterContext.Result = new HttpResultMessage<object> { IsSucceed = false, StatusCode = CPlatform.Exceptions.StatusCode.RequestError, Message = $"没有请求{actionName}的权限" };
+                                }
                             }
                         }
                         else
                         {
-                            filterContext.Result = new HttpResultMessage<object> { IsSucceed = false, StatusCode = CPlatform.Exceptions.StatusCode.UnAuthentication, Message = "您还没有登录系统,请先登录系统" };
+                            if (filterContext.Route.ServiceDescriptor.EnableAuthorization())
+                            {
+                                filterContext.Result = new HttpResultMessage<object> { IsSucceed = false, StatusCode = CPlatform.Exceptions.StatusCode.UnAuthentication, Message = $"请先登录系统" };
+                            }
                         }
 
                     }
+                    else 
+                    {
+                        if (filterContext.Route.ServiceDescriptor.EnableAuthorization())
+                        {
+                            filterContext.Result = new HttpResultMessage<object> { IsSucceed = false, StatusCode = CPlatform.Exceptions.StatusCode.UnAuthentication, Message = $"暂不支持{filterContext.Route.ServiceDescriptor.AuthType()}类型的身份认证方式" };
+                        }
+                    }
+                    
                 }
             }
 

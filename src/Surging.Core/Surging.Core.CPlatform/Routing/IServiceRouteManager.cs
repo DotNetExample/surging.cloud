@@ -35,6 +35,10 @@ namespace Surging.Core.CPlatform.Routing
         /// <returns>服务路由集合。</returns>
         Task<IEnumerable<ServiceRoute>> GetRoutesAsync(bool needUpdateFromServiceCenter = false);
 
+        Task<ServiceRoute> GetRouteByPathAsync(string path);
+
+        Task<ServiceRoute> GetRouteByServiceIdAsync(string serviceId);
+
         /// <summary>
         /// 设置服务路由。
         /// </summary>
@@ -70,7 +74,7 @@ namespace Surging.Core.CPlatform.Routing
         /// <returns>服务路由。</returns>
         public static async Task<ServiceRoute> GetAsync(this IServiceRouteManager serviceRouteManager, string serviceId)
         {
-            return (await serviceRouteManager.GetRoutesAsync()).SingleOrDefault(i => i.ServiceDescriptor.Id == serviceId);
+            return await serviceRouteManager.GetRouteByServiceIdAsync(serviceId);
         }
 
        

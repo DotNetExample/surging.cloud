@@ -5,7 +5,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace Surging.Core.CPlatform.Routing.Implementation
@@ -86,6 +88,58 @@ namespace Surging.Core.CPlatform.Routing.Implementation
             return Task.FromResult(0);
         }
 
+        public override async Task<ServiceRoute> GetRouteByPathAsync(string path)
+        {
+            var route = await GetRouteByPathFormCacheAsync(path);
+            if (route == null && !_mapRoutePathOptions.Any(p => p.TargetRoutePath == path))
+            {
+                await EntryRoutes(_filePath);
+                return await GetRouteByPathFormCacheAsync(path);
+            }
+            return route;         
+        }
+
+        private async Task<ServiceRoute> GetRouteByPathFormCacheAsync(string path)
+        {
+            if (_routes != null && _routes.Any(p => p.ServiceDescriptor.RoutePath == path))
+            {
+                return _routes.First(p => p.ServiceDescriptor.RoutePath == path);
+            }
+            return await GetRouteByRegexPathAsync(path);
+
+        }
+
+        private async Task<ServiceRoute> GetRouteByRegexPathAsync(string path)
+        {
+            var pattern = "/{.*?}";
+            var route = _routes.FirstOrDefault(i =>
+            {
+                var routePath = Regex.Replace(i.ServiceDescriptor.RoutePath, pattern, "");
+                var newPath = path.Replace(routePath, "");
+                return (newPath.StartsWith("/") || newPath.Length == 0) && i.ServiceDescriptor.RoutePath.Split("/").Length == path.Split("/").Length && !i.ServiceDescriptor.GetMetadata<bool>("IsOverload")
+                ;
+            });
+
+
+            if (route == null)
+            {
+                if (_logger.IsEnabled(LogLevel.Warning))
+                    _logger.LogWarning($"根据服务路由路径：{path}，找不到相关服务信息。");
+            }
+            return route;
+        }
+
+
+        public override async Task<ServiceRoute> GetRouteByServiceIdAsync(string serviceId)
+        {
+            if (_routes != null && _routes.Any(p => p.ServiceDescriptor.Id == serviceId))
+            {
+                return _routes.First(p => p.ServiceDescriptor.Id == serviceId);
+            }
+            await EntryRoutes(_filePath);
+            return _routes.FirstOrDefault(p => p.ServiceDescriptor.Id == serviceId);
+        }
+
         /// <summary>
         ///     设置服务路由。
         /// </summary>
@@ -98,7 +152,10 @@ namespace Surging.Core.CPlatform.Routing.Implementation
                 fileStream.SetLength(0);
                 using (var writer = new StreamWriter(fileStream, Encoding.UTF8))
                 {
-                    await writer.WriteAsync(_serializer.Serialize(routes));
+                    var nodeData = _serializer.Serialize(routes);
+                    if (_logger.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Debug))
+                        _logger.LogDebug($"准备设置服务路由信息：{nodeData}。");
+                    await writer.WriteAsync(nodeData);
                 }
             }
         }

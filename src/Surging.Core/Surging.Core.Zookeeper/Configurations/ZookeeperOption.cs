@@ -9,6 +9,8 @@ namespace Surging.Core.Zookeeper.Configurations
 
         public string SessionTimeout { get; set; }
 
+        public string ConnectionTimeout { get; set; }
+
         public string ConnectionString { get; set; }
 
         public string RoutePath { get; set; }

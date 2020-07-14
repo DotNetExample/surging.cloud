@@ -59,5 +59,7 @@ namespace Surging.Core.CPlatform
                 _serverOptions = value;
             }
         }
+
+        public static string PayloadKey { get; } = "payload";
     }
 }

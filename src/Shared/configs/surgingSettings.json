@@ -2,44 +2,61 @@
   "Surging": {
     "Ip": "${Surging_Server_IP}|0.0.0.0",
     "WatchInterval": 30,
-    "Port": "${Surging_Server_Port}|98",
+    "Port": "${Surging_Server_Port}|100",
     "MappingIp": "${Mapping_ip}",
     "MappingPort": "${Mapping_Port}",
     "Token": "true",
-    "WanIp": "${WanIp}|192.168.249.103",
+    "WanIp": "${WanIp}|0.0.0.0",
     "Libuv": true,
     "SoBacklog": 100,
-    "MaxConcurrentRequests": 20,
-    "DisconnTimeInterval": 30,
-    "ExecutionTimeoutInMilliseconds": 1000,
+    "MaxConcurrentRequests": 500,
+    "DisconnTimeInterval": 1000,
+    "ExecutionTimeoutInMilliseconds": 18000,
+    "HealthCheckTimeout": 100,
+    "BreakeSleepWindowInMilliseconds": 5000,
     "Protocol": "${Protocol}|None", //Http、Tcp、None
-    "RootPath": "${RootPath}|c:\\userapp",
-    "WebRootPath": "${WebRootPath}|c:\\UserApp\\wwwroot",
+    "RootPath": "${RootPath}|./userapp",
+    "WebRootPath": "${WebRootPath}|./userapp/wwwroot",
     "IsModulePerLifetimeScope": false,
     "ReloadOnChange": false,
+    "RequestCacheEnabled": true,
     "Ports": {
       "HttpPort": "${HttpPort}|8080",
       "WSPort": "${WSPort}|96",
       "MQTTPort": "${MQTTPort}|97"
     },
-    "RequestCacheEnabled": true,
+    "Environment": "${Environment}|Development",
     "Packages": [
       {
         "TypeName": "EnginePartModule",
-        "Using": "${UseEngineParts}|ServiceProxyModule;DotNettyModule;NLogModule;MessagePackModule;ConsulModule;WSProtocolModule;MqttProtocolModule;EventBusRabbitMQModule;CachingModule;KestrelHttpModule;DnsProtocolModule;SwaggerModule;ApiGeteWayModule;SkywalkingModule;"
+        "Using": "${UseEngineParts}|ServiceProxyModule;DotNettyModule;Log4netModule;MessagePackModule;ConsulModule;EventBusRabbitMQModule;CachingModule;KestrelHttpModule;ApiGeteWayModule;AutoMapperModule;DapperModule"
       },
       {
         "TypeName": "KestrelHttpModule",
-        "Using": "${UseKestrelHttpParts}|StageModule,SwaggerModule"
+        "Using": "${UseKestrelHttpParts}"
       }
     ]
   }, //如果引用多个同类型的组件，需要配置Packages，如果是自定义按需引用，无需配置Packages
-  "Consul": {
-    "ConnectionString": "${Register_Conn}|127.0.0.1:8500", // "127.0.0.1:8500,127.0.0.1:9500",
-    "SessionTimeout": "${Register_SessionTimeout}|50",
-    "RoutePath": "${Register_RoutePath}",
-    "ReloadOnChange": true,
-    "EnableChildrenMonitor": false
+  "DbSetting": {
+    "DbType": "${DbType}|MySql", //MySql SqlServer, Oracle, Postgres
+    "ConnectionString": "${ConnectionString}|Server=mysql;Database=surging_demo;Uid=root;Port=3306;Pwd=Surging!P4ss"
+  },
+  "ElasticSearch": {
+    "Address": "${ElasticSearchAddress}|http://elasticsearch.dev.jingshonline.net",
+    "DefaultIndexName": "${ElasticSearchDefaultIndexName}|jingshonline_case"
+    //"UserName": "",
+    //"Password": ""
+  },
+  "Automapper": {
+    "Assemblies": "JingShOnline.*.Application;JingShOnline.*.Common;"
+  },
+  "OssConfig": {
+    "Endpoint": "oss-cn-beijing.aliyuncs.com",
+    "Host": "http://cdn.dev.jingshonline.net/",
+    "Bucket": "jingshonline-dev",
+    "AccessKeyId": "LTAIk9eMYBg9swQB",
+    "AccessKeySecret": "JA4GPfW3bf2nHLcTPAdgG5aVw6i3ms",
+    "CallbackUrl": "http://fileserver.dev.jingshonline.net/v1/api/oss/callback"
   },
   "Stage": {
     "EnableHttps": false, // 不设置ports，默认httpsPort:443
@@ -49,16 +66,18 @@
     "IsCamelCaseResolver": "${IsCamelCaseResolver}|true",
     "Protocols": "Http1AndHttp2",
     "ApiGetWay": {
-      "AccessTokenExpireTimeSpan": "30",
-      "AuthorizationRoutePath": "api/permission/check",
-      "AuthorizationServiceKey": "",
+      "AccessTokenExpireTimeSpan": "10080",
       "AuthenticationRoutePath": "api/user/authentication",
-      "AuthenticationServiceKey": "User",
+      "AuthenticationServiceKey": "",
+      "AuthorizationRoutePath": "",
+      "AuthorizationServiceKey": "",
       "TokenEndpointPath": "api/oauth2/token",
-      "CacheMode": "ddlCache.Redis" //MemoryCache or  gateway.Redis save token
+      "CacheMode": "ddlCache.Redis", //MemoryCache or  gateway.Redis save token
+      "IsUsingTerminal": false,
+      "Terminals": "dashboard,web,iosapp,androidapp"
     },
     "AccessPolicy": {
-      "Origins": [ "http://127.0.0.1:1927", "http://localhost:927" ],
+      "Origins": [ "*" ],
       "AllowAnyHeader": true,
       "AllowAnyMethod": true
     },
@@ -71,11 +90,23 @@
         "WhiteList": "${whitelist}|192.168.10.50,192.168.43.0/24",
         "BlackList": "${blacklist}|192.168.2.50,192.168.1.0/16",
         "RoutePath": "api/user/exists",
-        "Enable": false
+        "Enable": true
       }
     ],
     "HttpsPort": "${StageHttpsPorts}|449,446",
-    "HttpPorts": "${StageHttpPorts}|285,282,283"
+    "HttpPorts": "${StageHttpPorts}"
+  },
+  "EventBus": {
+    "EventBusConnection": "${EventBusConnection}|rabbitmq",
+    "EventBusUserName": "${EventBusUserName}|guest", //用户名
+    "EventBusPassword": "${EventBusPassword}|guest", //密码
+    "VirtualHost": "${VirtualHost}|/",
+    "MessageTTL": "${MessageTTL}|30000", //消息过期时间，比如过期时间是30分钟就是1800000
+    "RetryCount": "${RetryCount}|1", //重试次数，这里设置的延迟队列，只能设置为1
+    "FailCount": "${FailCount}|3", //处理失败流程重试次数，如果出现异常，会进行重试
+    "PrefetchCount": "${PrefetchCount}|0", //设置均匀分配消费者消息的个数
+    "BrokerName": "surging_demo",
+    "Port": "${EventBusPort}|5672"
   },
   "Dns": {
     "RootDnsAddress": "192.168.1.1",
@@ -84,16 +115,16 @@
   "Swagger": {
     "Info": {
       "Version": "${SwaggerVersion}|V1", // "127.0.0.1:8500",
-      "Title": "${SwaggerTitle}|Surging Demo",
-      "Description": "${SwaggerDes}|surging demo",
+      "Title": "${SwaggerTitle}|hero",
+      "Description": "${SwaggerDes}|hero web api",
       "Contact": {
-        "Name": "API Support",
-        "Url": "https://github.com/dotnetcore/surging",
-        "Email": "fanliang1@hotmail.com"
+        "Name": "${SupportName}|hero",
+        "Url": "",
+        "Email": "${SupportEmail}|support@hero.com"
       },
       "License": {
-        "Name": "MIT",
-        "Url": "https://github.com/dotnetcore/surging/blob/master/LICENSE"
+        "Name": "",
+        "Url": ""
       }
     },
     "Options": {
@@ -103,18 +134,11 @@
           "SourceRoutePath": "api/user/authentication",
           "TargetRoutePath": "api/oauth2/token"
         }
-      ]
+      ],
+      "IsOnlyGenerateLocalHostDocs": "${IsOnlyGenerateLocalHostDocs}|false",
+      "AnnotationXmlDir": "${AnnotationXmlDir}|/app/annotationxmldir"
       // "IngressName": "Notice"
     }
-  },
-  "EventBus_Kafka": {
-    "Servers": "${EventBusConnection}|localhost:9092",
-    "MaxQueueBuffering": "${MaxQueueBuffering}|10",
-    "MaxSocketBlocking": "${MaxSocketBlocking}|10",
-    "EnableAutoCommit": "${EnableAutoCommit}|false",
-    "LogConnectionClose": "${LogConnectionClose}|false",
-    "OffsetReset": "${OffsetReset}|earliest",
-    "GroupID": "${EventBusGroupID}|surgingdemo"
   },
   "WebSocket": {
     "WaitTime": 2,
@@ -123,31 +147,6 @@
       "IgnoreExtensions": true,
       "EmitOnPing": false
     }
-  },
-  "EventBus": {
-    "EventBusConnection": "${EventBusConnection}|127.0.0.1",
-    "EventBusUserName": "${EventBusUserName}|rabbitmq",
-    "EventBusPassword": "${EventBusPassword}|rabbitmq",
-    "VirtualHost": "${VirtualHost}|/",
-    "MessageTTL": "${MessageTTL}|30000",
-    "RetryCount": "${RetryCount}|1",
-    "FailCount": "${FailCount}|3",
-    "prefetchCount": "${PrefetchCount}|0",
-    "BrokerName": "${BrokerName}|surging_demo",
-    "Port": "${EventBusPort}|5672"
-  },
-  "Zookeeper": {
-    "ConnectionString": "${Zookeeper_ConnectionString}|127.0.0.1:2181", // "127.0.0.1:2181,127.0.0.1:2281",
-    "SessionTimeout": 50,
-    "ReloadOnChange": true
-  },
-  "RabbitMQ": {
-    "EventBus": {
-      "ConnectionName": "",
-      "ClientName": "",
-      "ExchangeName": ""
-    }
-
   },
   "Logging": {
     "Debug": {

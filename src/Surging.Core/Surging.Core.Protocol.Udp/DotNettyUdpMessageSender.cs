@@ -3,6 +3,7 @@ using DotNetty.Transport.Channels;
 using Surging.Core.CPlatform.Messages;
 using Surging.Core.CPlatform.Transport;
 using Surging.Core.CPlatform.Transport.Codec;
+using Surging.Core.CPlatform.Transport.Implementation;
 using System.Threading.Tasks;
 
 namespace Surging.Core.Protocol.Udp
@@ -58,6 +59,7 @@ namespace Surging.Core.Protocol.Udp
             var buffer = GetByteBuffer(message);
             if( _context.Channel.RemoteAddress !=null)
             await _context.WriteAndFlushAsync(buffer);
+            //RpcContext.GetContext().ClearAttachment();
         }
 
         #endregion Implementation of IMessageSender

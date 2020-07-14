@@ -95,7 +95,6 @@ namespace Surging.Core.SwaggerGen
                     .FirstOrDefault(p => parameter.Name.Equals(
                         (p.BindingInfo?.BinderModelName ?? p.Name), StringComparison.OrdinalIgnoreCase));
                 if (actionParameter == null) continue;
-
                 var paramNode = methodNode.SelectSingleNode(string.Format(ParamXPath, actionParameter.Name));
                 if (paramNode != null)
                     parameter.Description = XmlCommentsTextHelper.Humanize(paramNode.InnerXml);

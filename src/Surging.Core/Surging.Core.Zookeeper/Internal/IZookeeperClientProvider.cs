@@ -1,18 +1,16 @@
-﻿using org.apache.zookeeper;
+﻿using Rabbit.Zookeeper;
 using System;
 using System.Collections.Generic;
-using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace Surging.Core.Zookeeper.Internal
 {
-   public interface IZookeeperClientProvider
+    public interface IZookeeperClientProvider : IDisposable
     {
-        ValueTask<(ManualResetEvent, ZooKeeper)> GetZooKeeper();
+        Task<IZookeeperClient> GetZooKeeperClient();
 
-        ValueTask<IEnumerable<(ManualResetEvent, ZooKeeper)>> GetZooKeepers();
+        Task<IEnumerable<IZookeeperClient>> GetZooKeeperClients();
 
-        ValueTask Check();
+        Task Check();
     }
 }

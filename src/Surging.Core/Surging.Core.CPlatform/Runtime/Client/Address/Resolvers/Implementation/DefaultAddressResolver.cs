@@ -1,5 +1,7 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using Autofac.Core;
+using Microsoft.Extensions.Logging;
 using Surging.Core.CPlatform.Address;
+using Surging.Core.CPlatform.Exceptions;
 using Surging.Core.CPlatform.Routing;
 using Surging.Core.CPlatform.Routing.Implementation;
 using Surging.Core.CPlatform.Runtime.Client.Address.Resolvers.Implementation.Selectors;
@@ -69,7 +71,7 @@ namespace Surging.Core.CPlatform.Runtime.Client.Address.Resolvers.Implementation
         /// 7.拿到服务命今
         /// 8.根据负载分流策略拿到一个选择器
         /// 9.返回addressmodel
-        public async ValueTask<AddressModel> Resolver(string serviceId, string item, bool isRetry = false)
+        public async Task<AddressModel> Resolver(string serviceId, string item)
         {
             if (_logger.IsEnabled(LogLevel.Debug))
                 _logger.LogDebug($"准备为服务id：{serviceId}，解析可用地址。");
@@ -77,45 +79,27 @@ namespace Surging.Core.CPlatform.Runtime.Client.Address.Resolvers.Implementation
             _concurrent.TryGetValue(serviceId, out ServiceRoute descriptor);
             if (descriptor == null)
             {
-                var descriptors = await _serviceRouteManager.GetRoutesAsync();
-                descriptor = descriptors.FirstOrDefault(i => i.ServiceDescriptor.Id == serviceId);
-                if (descriptor != null)
+                descriptor = await _serviceRouteManager.GetAsync(serviceId);
+                if (descriptor == null) 
                 {
-                    _concurrent.GetOrAdd(serviceId, descriptor);
-                    _serviceHeartbeatManager.AddWhitelist(serviceId);
-                }
-                else
-                {
-                    if (descriptor == null)
-                    {
-                        if (_logger.IsEnabled(LogLevel.Warning))
-                            _logger.LogWarning($"根据服务id：{serviceId}，找不到相关服务信息。");
-                        return null;
-                    }
+                    throw new CPlatformException($"通过{serviceId}获取服务路由失败,请检查服务集群信息");
                 }
             }
+            
+            _concurrent.GetOrAdd(serviceId, descriptor);
+            _serviceHeartbeatManager.AddWhitelist(serviceId);
 
             var address = new List<AddressModel>();
             foreach (var addressModel in descriptor.Address)
             {
-                _healthCheckService.Monitor(addressModel);
-                var task = _healthCheckService.IsHealth(addressModel);
-                if (!(task.IsCompletedSuccessfully ? task.Result : await task))
+                await _healthCheckService.Monitor(addressModel);
+                var isHealth = await _healthCheckService.IsHealth(addressModel);
+                if (!isHealth)
                 {
+                    _logger.LogDebug($"服务地址：{addressModel.ToString()}处于不健康状态。");
                     continue;
                 }
-                if (isRetry)
-                {
-                    address.Add(addressModel);
-                }
-                else 
-                {
-                    if (addressModel.IsHealth) 
-                    {
-                        address.Add(addressModel);
-                    }
-                }
-                
+                address.Add(addressModel);
             }
 
             if (!address.Any())
@@ -127,17 +111,16 @@ namespace Surging.Core.CPlatform.Runtime.Client.Address.Resolvers.Implementation
 
             if (_logger.IsEnabled(LogLevel.Information))
                 _logger.LogInformation($"根据服务id：{serviceId}，找到以下可用地址：{string.Join(",", address.Select(i => i.ToString()))}。");
-            var vtCommand = _commandProvider.GetCommand(serviceId);
-            var command = vtCommand.IsCompletedSuccessfully ? vtCommand.Result : await vtCommand;
+            var command = await _commandProvider.GetCommand(serviceId);
             var addressSelector = _addressSelectors[command.ShuntStrategy.ToString()];
 
-            var vt = addressSelector.SelectAsync(new AddressSelectContext
+            var selectAddr = await addressSelector.SelectAsync(new AddressSelectContext
             {
                 Descriptor = descriptor.ServiceDescriptor,
                 Address = address,
                 Item = item
             });
-            return vt.IsCompletedSuccessfully ? vt.Result : await vt;
+            return selectAddr;
         }
 
         private static string GetCacheKey(ServiceDescriptor descriptor)

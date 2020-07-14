@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -7,12 +8,11 @@ using System.Timers;
 
 namespace Surging.Core.CPlatform.Routing
 {
-    public class ServiceRouteCompensator
+    public class ServiceRouteCompensator : IDisposable
     {
         private readonly Timer _timer;
         private ILogger<ServiceRouteCompensator> _logger;
         private IServiceRouteProvider _serviceRouteProvider;
-        private int count = 1;
 
         public ServiceRouteCompensator(ILogger<ServiceRouteCompensator> logger, IServiceRouteProvider serviceRouteProvider)
         {
@@ -20,11 +20,22 @@ namespace Surging.Core.CPlatform.Routing
             _serviceRouteProvider = serviceRouteProvider;
             _timer = new Timer();
             _timer.Enabled = true;
-            
-            _timer.Interval = GenerateInterval();
+
+            _timer.Interval = AppConfig.ServerOptions.ServiceRouteWatchIntervalInMinutes * 1000 * 60;
             _timer.Elapsed += _timer_Elapsed;
             _timer.Start();
+            
+            
+        }
 
+        public void Dispose()
+        {
+            if (_timer != null) 
+            {
+                _timer.Stop();
+                _timer.Dispose();
+            }
+            
         }
 
         private int GenerateInterval()
@@ -36,20 +47,8 @@ namespace Surging.Core.CPlatform.Routing
 
         private void _timer_Elapsed(object sender, ElapsedEventArgs e)
         {
+            _serviceRouteProvider.RegisterRoutes(Math.Round(Convert.ToDecimal(Process.GetCurrentProcess().TotalProcessorTime.TotalSeconds), 2, MidpointRounding.AwayFromZero)).Wait();
             
-            if (count <= AppConfig.ServerOptions.CompensationRegisterRoutesCount)
-            {
-                _serviceRouteProvider.RegisterRoutes(Math.Round(Convert.ToDecimal(Process.GetCurrentProcess().TotalProcessorTime.TotalSeconds), 2, MidpointRounding.AwayFromZero)).Wait();
-                if (_logger.IsEnabled(LogLevel.Debug)) {
-                    _logger.LogDebug($"第{count}次进行服务路由补偿注册");
-                }
-                count++;
-            }
-            else
-            {
-                _timer.Stop();
-                _timer.Dispose();
-            }
 
         }
     }

@@ -7,7 +7,7 @@ using System.Text;
 
 namespace Surging.Core.ProxyGenerator.Interceptors
 {
-    public  class InvocationMethods
+    public class InvocationMethods
     {
         public static readonly ConstructorInfo CompositionInvocationConstructor =
         typeof(ActionInvocation).GetConstructor(BindingFlags.Instance | BindingFlags.NonPublic, null,

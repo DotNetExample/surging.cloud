@@ -6,6 +6,7 @@ using Surging.Core.CPlatform.Messages;
 using Surging.Core.CPlatform.Serialization;
 using Surging.Core.CPlatform.Transport;
 using Surging.Core.CPlatform.Transport.Codec;
+using Surging.Core.CPlatform.Transport.Implementation;
 using Surging.Core.DotNetty;
 using System.Text;
 using System.Threading.Tasks;
@@ -53,6 +54,7 @@ namespace Surging.Core.Protocol.Http
 
             await _context.WriteAndFlushAsync(response);
             await _context.CloseAsync();
+            //RpcContext.GetContext().ClearAttachment();
         }
 
         private IByteBuffer GetByteBuffer(TransportMessage message, out int contentLength)

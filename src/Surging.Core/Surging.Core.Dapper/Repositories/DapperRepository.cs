@@ -61,6 +61,7 @@ namespace Surging.Core.Dapper.Repositories
                     using (var trans = conn.BeginTransaction())
                     {
                         _creationActionFilter.ExecuteFilter(entity);
+
                         conn.Insert<TEntity>(entity, trans);
                         if (isUserSearchElasitcModule)
                         {
@@ -101,7 +102,6 @@ namespace Surging.Core.Dapper.Repositories
                     {
 
                         _creationActionFilter.ExecuteFilter(entity);
-                      
                         conn.Insert(entity, trans);
                         if (isUserSearchElasitcModule)
                         {

@@ -1,58 +1,66 @@
-﻿using System;
-using System.Collections.Concurrent;
-using System.Runtime.CompilerServices;
+﻿using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading;
 
 namespace Surging.Core.CPlatform.Transport.Implementation
 {
+
     public class RpcContext
     {
-        private ConcurrentDictionary<String, Object> contextParameters;
+        private ConcurrentDictionary<string, object> contextParameters;
+        private static AsyncLocal<RpcContext> rpcContextThreadLocal = new AsyncLocal<RpcContext>();
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ConcurrentDictionary<String, Object> GetContextParameters()
+        public IDictionary<string, object> GetContextParameters()
         {
             return contextParameters;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
         public void SetAttachment(string key, object value)
         {
             contextParameters.AddOrUpdate(key, value, (k, v) => value);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public object GetAttachment(string key)
         {
             contextParameters.TryGetValue(key, out object result);
             return result;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void SetContextParameters(ConcurrentDictionary<String, Object> contextParameters)
+
+        public void SetContextParameters(IDictionary<string, object> contextParameters)
         {
-            this.contextParameters = contextParameters;
+            foreach (var item in contextParameters) 
+            {
+                SetAttachment(item.Key, item.Value);
+            }
+           
         }
 
-        private static ThreadLocal<RpcContext> rpcContextThreadLocal = new ThreadLocal<RpcContext>(() =>
-        {
-            RpcContext context = new RpcContext();
-            context.SetContextParameters(new ConcurrentDictionary<string, object>());
-            return context;
-        });
+       
 
         public static RpcContext GetContext()
         {
+            var context = rpcContextThreadLocal.Value;
+
+            if (context == null)
+            {
+                context = new RpcContext();
+                rpcContextThreadLocal.Value = context;
+            }
+
             return rpcContextThreadLocal.Value;
         }
 
         public static void RemoveContext()
         {
-            rpcContextThreadLocal.Dispose();
+            rpcContextThreadLocal.Value = null;
         }
 
         private RpcContext()
         {
+            contextParameters = new ConcurrentDictionary<string, object>();
         }
     }
+
 }

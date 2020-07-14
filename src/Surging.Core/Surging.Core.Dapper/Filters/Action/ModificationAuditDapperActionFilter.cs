@@ -11,6 +11,7 @@ namespace Surging.Core.Dapper.Filters.Action
     {
         public void ExecuteFilter(TEntity entity)
         {
+            ////var loginUser = NullSurgingSession.Instance;
             if (typeof(IModificationAudited).IsAssignableFrom(typeof(TEntity)) && _loginUser != null)
             {
 

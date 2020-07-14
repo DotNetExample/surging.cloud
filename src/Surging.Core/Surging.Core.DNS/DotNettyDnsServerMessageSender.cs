@@ -10,6 +10,7 @@ using Surging.Core.CPlatform.Messages;
 using Surging.Core.CPlatform.Serialization;
 using Surging.Core.CPlatform.Transport;
 using Surging.Core.CPlatform.Transport.Codec;
+using Surging.Core.CPlatform.Transport.Implementation;
 using Surging.Core.DNS.Extensions;
 using Surging.Core.DNS.Utilities;
 using Surging.Core.DotNetty;
@@ -29,6 +30,7 @@ namespace Surging.Core.DNS
         {
             var response=await  WriteResponse(message);
             await _context.WriteAndFlushAsync(response);
+            //RpcContext.GetContext().ClearAttachment();
         }
 
         public async Task SendAsync(TransportMessage message)

@@ -1,4 +1,6 @@
-﻿using Surging.Core.CPlatform.Address;
+﻿using Microsoft.Extensions.Configuration;
+using Surging.Core.CPlatform.Address;
+using Surging.Core.CPlatform.Configurations;
 using Surging.Core.CPlatform.Serialization;
 using System;
 using System.Collections.Generic;
@@ -48,10 +50,12 @@ namespace Surging.Core.CPlatform.Routing.Implementation
         private EventHandler<ServiceRouteEventArgs> _created;
         private EventHandler<ServiceRouteEventArgs> _removed;
         private EventHandler<ServiceRouteChangedEventArgs> _changed;
+        protected readonly IEnumerable<MapRoutePathOption> _mapRoutePathOptions;
 
         protected ServiceRouteManagerBase(ISerializer<string> serializer)
         {
             _serializer = serializer;
+            _mapRoutePathOptions = GetMapRoutePaths();
         }
 
         #region Implementation of IServiceRouteManager
@@ -125,6 +129,13 @@ namespace Surging.Core.CPlatform.Routing.Implementation
             };
             return SetRouteAsync(descriptor);
         }
+
+        public abstract Task<ServiceRoute> GetRouteByPathAsync(string path);
+
+
+        public abstract Task<ServiceRoute> GetRouteByServiceIdAsync(string serviceId);
+       
+
         public abstract Task RemveAddressAsync(IEnumerable<AddressModel> Address);
 
         /// <summary>
@@ -143,6 +154,17 @@ namespace Surging.Core.CPlatform.Routing.Implementation
         protected abstract Task SetRoutesAsync(IEnumerable<ServiceRouteDescriptor> routes);
 
         protected abstract Task SetRouteAsync(ServiceRouteDescriptor route);
+
+        protected virtual IEnumerable<MapRoutePathOption> GetMapRoutePaths() 
+        {
+            var mapRoutePathOptions = new List<MapRoutePathOption>();
+            var mapRoutePathSection = AppConfig.GetSection("Swagger:Options:MapRoutePaths");
+            if (mapRoutePathSection.Exists())
+            {
+                mapRoutePathOptions = mapRoutePathSection.Get<List<MapRoutePathOption>>();
+            }
+            return mapRoutePathOptions;
+        }
 
 
         protected void OnCreated(params ServiceRouteEventArgs[] args)
@@ -172,6 +194,6 @@ namespace Surging.Core.CPlatform.Routing.Implementation
                 _removed(this, arg);
         }
 
-        
+
     }
 }

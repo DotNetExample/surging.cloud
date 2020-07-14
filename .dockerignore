@@ -30,3 +30,8 @@ cli-linux
 **/bower_components/
 **/wwwroot/lib/*
 **/global.json
+**/.mysql/
+**/global.json
+*.L[l]og[s]
+**/logs/
+**/log/

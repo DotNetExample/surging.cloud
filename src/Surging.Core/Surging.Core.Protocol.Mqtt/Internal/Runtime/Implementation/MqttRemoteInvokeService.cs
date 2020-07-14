@@ -62,6 +62,15 @@ namespace Surging.Core.Protocol.Mqtt.Internal.Runtime.Implementation
                     {
                         await _healthCheckService.MarkFailure(address);
                     }
+                    catch (TimeoutException ex)
+                    {
+                        if (address != null)
+                        {
+                            _logger.LogError($"使用地址：'{address.ToString()}'调用服务{context.InvokeMessage.ServiceId}超时,原因:{ex.Message}");
+                            await _healthCheckService.MarkFailureForTimeOut(address);
+                        }
+                        throw;
+                    }
                     catch (Exception exception)
                     {
                         _logger.LogError(exception, $"发起请求中发生了错误，服务Id：{invokeMessage.ServiceId}。");
@@ -97,6 +106,15 @@ namespace Surging.Core.Protocol.Mqtt.Internal.Runtime.Implementation
                         catch (CommunicationException)
                         {
                             await _healthCheckService.MarkFailure(address);
+                        }
+                        catch (TimeoutException ex)
+                        {
+                            if (address != null)
+                            {
+                                _logger.LogError($"使用地址：'{address.ToString()}'调用服务{context.InvokeMessage.ServiceId}超时,原因:{ex.Message}");
+                                await _healthCheckService.MarkFailureForTimeOut(address);
+                            }
+                            throw;
                         }
                         catch (Exception exception)
                         {

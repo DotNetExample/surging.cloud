@@ -32,7 +32,6 @@ namespace Surging.Core.Consul
         private MqttServiceRoute[] _routes;
         private readonly IConsulClientProvider _consulClientFactory;
         private readonly IServiceHeartbeatManager _serviceHeartbeatManager;
-
         public ConsulMqttServiceRouteManager(ConfigInfo configInfo, ISerializer<byte[]> serializer,
        ISerializer<string> stringSerializer, IClientWatchManager manager, IMqttServiceFactory mqttServiceFactory,
        ILogger<ConsulMqttServiceRouteManager> logger,IServiceHeartbeatManager serviceHeartbeatManager,
@@ -65,6 +64,7 @@ namespace Surging.Core.Consul
                         await client.KV.DeleteCAS(result);
                     }
                 }
+                
             }
         }
 
@@ -152,7 +152,7 @@ namespace Surging.Core.Consul
                 {
                     var nodeData = _serializer.Serialize(serviceRoute);
                     var keyValuePair = new KVPair($"{_configInfo.MqttRoutePath}{serviceRoute.MqttDescriptor.Topic}") { Value = nodeData };
-                    await client.KV.Put(keyValuePair);
+                    await client.KV.Put(keyValuePair);                    
                 }
             }
         }

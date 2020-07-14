@@ -17,7 +17,7 @@ namespace Surging.Core.Consul.Internal.Cluster.Implementation.Selectors.Implemen
         /// </summary>
         /// <param name="context">地址选择上下文。</param>
         /// <returns>地址模型。</returns>
-        async ValueTask<AddressModel> IAddressSelector.SelectAsync(AddressSelectContext context)
+        async Task<AddressModel> IAddressSelector.SelectAsync(AddressSelectContext context)
         {
             if (context == null)
                 throw new ArgumentNullException(nameof(context));
@@ -27,7 +27,7 @@ namespace Surging.Core.Consul.Internal.Cluster.Implementation.Selectors.Implemen
                 throw new ArgumentNullException(nameof(context.Address));
 
             //  var address = context.Address.ToArray();
-            if (context.Address.Count() == 0)
+            if (!context.Address.Any())
                 throw new ArgumentException("没有任何地址信息。", nameof(context.Address)); 
 
             if (context.Address.Count() == 1)
@@ -36,8 +36,7 @@ namespace Surging.Core.Consul.Internal.Cluster.Implementation.Selectors.Implemen
             }
             else
             {
-                var vt = SelectAsync(context);
-                return vt.IsCompletedSuccessfully ? vt.Result : await vt;
+                return await SelectAsync(context);
             }
         }
 

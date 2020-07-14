@@ -54,6 +54,10 @@ namespace Surging.Core.CPlatform.Support.Implementation
                             result = default(T);
                         }
                     }
+                    else if (message.IsFailedRemoteInvokeCalled())
+                    {
+                        continue;
+                    }
                     else if (message.IsSucceedRemoteInvokeCalled())
                     {
                         throw message.GetExceptionByStatusCode();
@@ -82,7 +86,15 @@ namespace Surging.Core.CPlatform.Support.Implementation
                 message = await _breakeRemoteInvokeService.InvokeAsync(parameters, serviceId, _serviceKey, decodeJOject);
                 if (message != null)
                 {
-                    if (message.IsSucceedRemoteInvokeCalled())
+                    if (message.StatusCode == StatusCode.Success) 
+                    {
+                        break;
+                    }
+                    else if (message.IsFailedRemoteInvokeCalled())
+                    {
+                        continue;
+                    }
+                    else if (message.IsSucceedRemoteInvokeCalled())
                     {
                         throw message.GetExceptionByStatusCode();
                     }
@@ -122,6 +134,10 @@ namespace Surging.Core.CPlatform.Support.Implementation
                         {
                             result = message.Result;
                         }
+                    }
+                    else if (message.IsFailedRemoteInvokeCalled())
+                    {
+                        continue;
                     }
                     else if (message.IsSucceedRemoteInvokeCalled())
                     {

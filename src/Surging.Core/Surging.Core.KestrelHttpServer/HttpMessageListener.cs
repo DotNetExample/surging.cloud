@@ -109,7 +109,7 @@ namespace Surging.Core.KestrelHttpServer
                
                 if (!await OnActionExecuting(new ActionExecutingContext { Context = context, Route = serviceRoute, Message = httpMessage }, 
                     sender, messageId, actionFilters)) return;
-                httpMessage.Attachments = RpcContext.GetContext().GetContextParameters();
+                httpMessage.Attachments = GetHttpMessageAttachments(context);
                 await Received(sender, new TransportMessage(messageId,httpMessage));
             }
             else
@@ -123,19 +123,34 @@ namespace Surging.Core.KestrelHttpServer
                         httpMessage.Parameters.Add(param.Key, param.Value);
                     if (!await OnActionExecuting(new ActionExecutingContext { Context = context, Route = serviceRoute, Message = httpMessage },
                        sender,  messageId, actionFilters)) return;
-                    httpMessage.Attachments = RpcContext.GetContext().GetContextParameters();
+                    httpMessage.Attachments = GetHttpMessageAttachments(context);
                     await Received(sender, new TransportMessage(messageId,httpMessage));
                 }
                 else
                 {
                     if (!await OnActionExecuting(new ActionExecutingContext { Context = context, Route = serviceRoute, Message = httpMessage }, 
                         sender, messageId, actionFilters)) return;
-                    httpMessage.Attachments = RpcContext.GetContext().GetContextParameters();
+                    httpMessage.Attachments = GetHttpMessageAttachments(context);
                     await Received(sender, new TransportMessage(messageId,httpMessage));
                 }
             }
-          
+
+            
+
             await OnActionExecuted(context, httpMessage, actionFilters);
+        }
+
+        private IDictionary<string, object> GetHttpMessageAttachments(HttpContext context)
+        {
+            var httpMessageAttachments = RpcContext.GetContext().GetContextParameters();
+            if (context.User.Claims != null && context.User.Claims.Any())
+            {
+                foreach (var claims in context.User.Claims) 
+                {
+                    httpMessageAttachments.Add(claims.Type, claims.Value);
+                }
+            }
+            return httpMessageAttachments;
         }
 
         public async Task<bool> OnActionExecuting(ActionExecutingContext filterContext, IMessageSender sender, string messageId, IEnumerable<IActionFilter> filters)

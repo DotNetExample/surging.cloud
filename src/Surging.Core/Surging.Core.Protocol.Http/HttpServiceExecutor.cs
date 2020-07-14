@@ -7,6 +7,7 @@ using Surging.Core.CPlatform.Messages;
 using Surging.Core.CPlatform.Routing;
 using Surging.Core.CPlatform.Runtime.Server;
 using Surging.Core.CPlatform.Transport;
+using Surging.Core.CPlatform.Transport.Implementation;
 using Surging.Core.CPlatform.Utilities;
 using Surging.Core.ProxyGenerator;
 using System;
@@ -67,6 +68,13 @@ namespace Surging.Core.Protocol.Http
             try
             {
                 httpMessage = message.GetContent<HttpMessage>();
+                if (httpMessage.Attachments != null) 
+                {
+                    foreach (var attachment in httpMessage.Attachments)
+                    {
+                        RpcContext.GetContext().SetAttachment(attachment.Key, attachment.Value);
+                    }
+                }
             }
             catch (Exception exception)
             {

@@ -38,7 +38,7 @@ namespace Surging.Core.Consul.Internal.Implementation
             _logger = logger;
         }
 
-        public async ValueTask<ConsulClient> GetClient()
+        public async Task<ConsulClient> GetClient()
         {
             ConsulClient result = null;
             var address = new List<AddressModel>();
@@ -59,12 +59,12 @@ namespace Surging.Core.Consul.Internal.Implementation
                 return null;
             }
 
-            var vt = _consulAddressSelector.SelectAsync(new AddressSelectContext
+            var addr = await _consulAddressSelector.SelectAsync(new AddressSelectContext
             {
                 Descriptor = new ServiceDescriptor { Id = nameof(DefaultConsulClientProvider) },
                 Address = address
             });
-            var addr = vt.IsCompletedSuccessfully ? vt.Result : await vt;
+
             if (addr != null)
             {
                 var ipAddress = addr as IpAddressModel;
@@ -76,7 +76,7 @@ namespace Surging.Core.Consul.Internal.Implementation
             return result;
         }
 
-        public async ValueTask<IEnumerable<ConsulClient>> GetClients()
+        public async Task<IEnumerable<ConsulClient>> GetClients()
         {
             var result = new List<ConsulClient>();
             foreach (var address in _config.Addresses)
@@ -94,7 +94,7 @@ namespace Surging.Core.Consul.Internal.Implementation
             return result;
         }
 
-        public async ValueTask Check()
+        public async Task Check()
         {
             foreach (var address in _config.Addresses)
             {

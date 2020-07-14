@@ -1,4 +1,5 @@
-﻿using Surging.Core.Domain.Entities;
+﻿using Nest;
+using Surging.Core.Domain.Entities;
 using System;
 
 namespace Surging.Core.Dapper.Filters.Elastic
@@ -12,7 +13,7 @@ namespace Surging.Core.Dapper.Filters.Elastic
             if (_isUseElasticSearchModule && typeof(IElasticSearch).IsAssignableFrom(typeof(TEntity)))
             {
                 var indexName = typeof(TEntity).Name.ToLower();
-                var indexResponse = _elasticClient.Delete(new Nest.DocumentPath<TEntity>(Nest.Id.From(entity)), idx => idx.Index(indexName));
+                var indexResponse = _elasticClient.Delete(new Nest.DocumentPath<TEntity>(Id.From(entity)), idx => idx.Index(indexName));
                 if (indexResponse.IsValid)
                 {
                     return true;

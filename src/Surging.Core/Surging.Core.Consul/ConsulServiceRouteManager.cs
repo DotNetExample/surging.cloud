@@ -16,8 +16,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using LogLevel = Microsoft.Extensions.Logging.LogLevel;
 
 namespace Surging.Core.Consul
 {
@@ -114,7 +116,7 @@ namespace Surging.Core.Consul
                         route.Address = addresses;
                     }
                 }
-                await RemoveExceptRoutesAsync(routes, hostAddr);
+                //await RemoveExceptRoutesAsync(routes, hostAddr);
                 await base.SetRoutesAsync(routes);
             }
             finally
@@ -123,17 +125,61 @@ namespace Surging.Core.Consul
             }
         }
 
-        protected override async Task SetRouteAsync(ServiceRouteDescriptor route)
+        public override async Task<ServiceRoute> GetRouteByPathAsync(string path)
         {
-            var clients = await _consulClientProvider.GetClients();
-            foreach (var client in clients)
+            var route = await GetRouteByPathFormCacheAsync(path);
+            if (route == null && !_mapRoutePathOptions.Any(p=>p.TargetRoutePath == path))
             {
-                var nodeData = _serializer.Serialize(route);
-                var keyValuePair = new KVPair($"{_configInfo.RoutePath}{route.ServiceDescriptor.Id}") { Value = nodeData };
-                await client.KV.Put(keyValuePair);
-            }
+                await EnterRoutes(true);
+                return await GetRouteByPathFormCacheAsync(path);
+            }            
+            return route;
         }
 
+        private async Task<ServiceRoute> GetRouteByPathFormCacheAsync(string path)
+        {
+            if (_routes != null && _routes.Any(p => p.ServiceDescriptor.RoutePath == path))
+            {
+                return _routes.First(p => p.ServiceDescriptor.RoutePath == path);
+            }
+            return await GetRouteByRegexPathAsync(path);
+
+        }
+
+        private async Task<ServiceRoute> GetRouteByRegexPathAsync(string path)
+        {
+            var pattern = "/{.*?}";
+            if (_routes != null)
+            {
+                var route = _routes.FirstOrDefault(i =>
+                {
+                    var routePath = Regex.Replace(i.ServiceDescriptor.RoutePath, pattern, "");
+                    var newPath = path.Replace(routePath, "");
+                    return (newPath.StartsWith("/") || newPath.Length == 0) && i.ServiceDescriptor.RoutePath.Split("/").Length == path.Split("/").Length;
+
+                });
+
+
+                if (route == null)
+                {
+                    if (_logger.IsEnabled(LogLevel.Warning))
+                        _logger.LogWarning($"根据服务路由路径：{path}，找不到相关服务信息。");
+                }
+                return route;
+            }
+            return null;
+
+
+        }
+        public override async Task<ServiceRoute> GetRouteByServiceIdAsync(string serviceId)
+        {
+            if (_routes != null && _routes.Any(p => p.ServiceDescriptor.Id == serviceId))
+            {
+                return _routes.First(p => p.ServiceDescriptor.Id == serviceId);
+            }
+            await EnterRoutes(true);
+            return _routes.FirstOrDefault(p => p.ServiceDescriptor.Id == serviceId);
+        }
 
         public override async Task RemveAddressAsync(IEnumerable<AddressModel> Address)
         {
@@ -144,7 +190,7 @@ namespace Surging.Core.Consul
                 {
                     route.Address = route.Address.Except(Address).ToList();
                 }
-                _logger.LogDebug($"地址为{Address.Select(p => p.ToString()).JoinAsString(",")}的服务当前不健康,将会从服务列表中移除");
+                _logger.LogInformation($"地址为{Address.Select(p => p.ToString()).JoinAsString(",")}的服务当前不健康,将会从服务列表中移除");
             }
             catch (Exception ex)
             {
@@ -161,9 +207,24 @@ namespace Surging.Core.Consul
                 foreach (var serviceRoute in routes)
                 {
                     var nodeData = _serializer.Serialize(serviceRoute);
+                    if (_logger.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Debug))
+                        _logger.LogDebug($"准备设置服务路由信息：{Encoding.UTF8.GetString(nodeData)}。");
                     var keyValuePair = new KVPair($"{_configInfo.RoutePath}{serviceRoute.ServiceDescriptor.Id}") { Value = nodeData };
                     await client.KV.Put(keyValuePair);
                 }
+            }
+        }
+
+        protected override async Task SetRouteAsync(ServiceRouteDescriptor route)
+        {
+            var clients = await _consulClientProvider.GetClients();
+            foreach (var client in clients)
+            {
+                var nodeData = _serializer.Serialize(route);
+                if (_logger.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Debug))
+                    _logger.LogDebug($"准备设置服务路由信息：{Encoding.UTF8.GetString(nodeData)}。");
+                var keyValuePair = new KVPair($"{_configInfo.RoutePath}{route.ServiceDescriptor.Id}") { Value = nodeData };
+                await client.KV.Put(keyValuePair);
             }
         }
 
@@ -177,14 +238,14 @@ namespace Surging.Core.Consul
             {
                 if (_routes != null)
                 {
-                    var oldRouteIds = _routes.Select(i => i.ServiceDescriptor.Id).ToArray();
+                    var oldRouteIds = _routes.Where(p=> !p.Address.Any()).Select(i => i.ServiceDescriptor.Id).ToArray();
                     var newRouteIds = routes.Select(i => i.ServiceDescriptor.Id).ToArray();
                     var deletedRouteIds = oldRouteIds.Except(newRouteIds).ToArray();
                     foreach (var deletedRouteId in deletedRouteIds)
                     {
                         var addresses = _routes.Where(p => p.ServiceDescriptor.Id == deletedRouteId).Select(p => p.Address).FirstOrDefault();
-                        if (addresses.Contains(hostAddr))
-                            await client.KV.Delete($"{_configInfo.RoutePath}{deletedRouteId}");
+                        await client.KV.Delete($"{_configInfo.RoutePath}{deletedRouteId}");
+
                     }
                 }
             }
@@ -236,7 +297,6 @@ namespace Surging.Core.Consul
                     }
 
                 }
-
             }
             return result;
         }
@@ -245,7 +305,7 @@ namespace Surging.Core.Consul
             if (_logger.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Debug))
                 _logger.LogDebug($"准备转换服务路由，配置内容：{Encoding.UTF8.GetString(data)}。");
 
-            if (data == null)
+            if (data == null || data.Length <= 0)
                 return null;
 
             var descriptor = _serializer.Deserialize<byte[], ServiceRouteDescriptor>(data);
@@ -332,7 +392,7 @@ namespace Surging.Core.Consul
             {
                 //创建子监控类
                 var watcher = new ChildrenMonitorWatcher(GetConsulClient, _manager, _configInfo.RoutePath,
-             async (oldChildrens, newChildrens) => await ChildrenChange(oldChildrens, newChildrens),
+                async (oldChildrens, newChildrens) => await ChildrenChange(oldChildrens, newChildrens),
                (result) => ConvertPaths(result).Result);
                 //对委托绑定方法
                 action = currentData => watcher.SetCurrentData(currentData);
@@ -408,20 +468,38 @@ namespace Surging.Core.Consul
                 return;
 
             var newRoute = await GetRoute(newData);
-            //得到旧的路由。
-            var oldRoute = _routes.FirstOrDefault(i => i.ServiceDescriptor.Id == newRoute.ServiceDescriptor.Id);
-
-            lock (_routes)
+            if (_routes != null && _routes.Any() && newRoute != null) 
             {
-                //删除旧路由，并添加上新的路由。
-                _routes =
-                    _routes
-                        .Where(i => i.ServiceDescriptor.Id != newRoute.ServiceDescriptor.Id)
-                        .Concat(new[] { newRoute }).ToArray();
-            }
+                //得到旧的路由。
+                var oldRoute = _routes.FirstOrDefault(i => i.ServiceDescriptor.Id == newRoute.ServiceDescriptor.Id);
+                if (newRoute.Address.Any())
+                {
+                    lock (_routes)
+                    {
+                        //删除旧路由，并添加上新的路由。
+                        _routes =
+                            _routes
+                                .Where(i => i.ServiceDescriptor.Id != newRoute.ServiceDescriptor.Id)
+                                .Concat(new[] { newRoute }).ToArray();
+                    }
 
-            //触发路由变更事件。
-            OnChanged(new ServiceRouteChangedEventArgs(newRoute, oldRoute));
+                    //触发路由变更事件。
+                    OnChanged(new ServiceRouteChangedEventArgs(newRoute, oldRoute));
+
+                }
+                else 
+                {
+                    lock (_routes)
+                    {
+                        //删除旧路由，并添加上新的路由。
+                        _routes = _routes.Where(i => i.ServiceDescriptor.Id != newRoute.ServiceDescriptor.Id).ToArray();
+                    }
+                    OnRemoved(new ServiceRouteEventArgs(newRoute));
+
+                }
+
+            }
+          
         }
 
         /// <summary>

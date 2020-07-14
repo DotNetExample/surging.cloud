@@ -30,6 +30,6 @@ namespace Surging.Core.CPlatform.Runtime.Client
         /// <param name="context">调用上下文。</param>
         /// <param name="cancellationToken">超时时间。</param>
         /// <returns>远程调用结果消息模型。</returns>
-        Task<RemoteInvokeResultMessage> InvokeAsync(RemoteInvokeContext context, int requestTimeout, bool isRetry = false);
+        Task<RemoteInvokeResultMessage> InvokeAsync(RemoteInvokeContext context, int requestTimeout);
     }
 }

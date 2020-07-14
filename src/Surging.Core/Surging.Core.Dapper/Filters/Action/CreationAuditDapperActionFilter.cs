@@ -11,7 +11,7 @@ namespace Surging.Core.Dapper.Filters.Action
 {
     public class CreationAuditDapperActionFilter<TEntity, TPrimaryKey> : DapperActionFilterBase, IAuditActionFilter<TEntity, TPrimaryKey> where TEntity : class, IEntity<TPrimaryKey>
     {
-       
+
         public void ExecuteFilter(TEntity entity)
         {
             if (typeof(ISoftDelete).IsAssignableFrom(entity.GetType()))
@@ -23,8 +23,8 @@ namespace Surging.Core.Dapper.Filters.Action
                 ((IHasCreationTime)entity).CreationTime = DateTime.Now;
             }
             CheckAndSetId(entity);
-           
-            if (_loginUser == null) 
+
+            if (_loginUser == null)
             {
                 _logger.LogDebug($"未获取到登录的用户信息");
             }
@@ -34,9 +34,18 @@ namespace Surging.Core.Dapper.Filters.Action
                 var record = entity as ICreationAudited;
                 record.CreatorUserId = _loginUser.UserId;
             }
-            if (typeof(IElasticSearch).IsAssignableFrom(typeof(TEntity))) 
+
+            if (typeof(IHasModificationTime).IsAssignableFrom(entity.GetType()))
             {
-                
+                ((IHasModificationTime)entity).LastModificationTime = DateTime.Now;
+            }
+            if (typeof(IModificationAudited).IsAssignableFrom(entity.GetType()) && _loginUser != null)
+            {
+                ((IModificationAudited)entity).LastModifierUserId = _loginUser.UserId;
+            }
+            if (typeof(IElasticSearch).IsAssignableFrom(typeof(TEntity)))
+            {
+
             }
         }
     }

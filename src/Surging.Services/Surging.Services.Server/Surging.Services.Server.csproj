@@ -3,7 +3,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <ServerGarbageCollection>false</ServerGarbageCollection>
-    <TargetFramework>netcoreapp3.0</TargetFramework>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
     <TieredCompilation>true</TieredCompilation>
   </PropertyGroup>
 
@@ -60,26 +60,26 @@
     <ProjectReference Include="..\..\Surging.Web\Surging.Web.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Update="cacheSettings.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="Configs\consul.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="NLog.config">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="eventBusSettings.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="log4net.config">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="surgingSettings.json">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
+	<ItemGroup>
+		<None Include="..\..\Shared\configs\cacheSettings.json" Link="configs\cacheSettings.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Include="..\..\Shared\configs\consul.json" Link="configs\consul.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Include="..\..\Shared\configs\eventBusSettings.json" Link="configs\eventBusSettings.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Include="..\..\Shared\configs\surgingSettings.json" Link="configs\surgingSettings.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Include="..\..\Shared\configs\log4net.config" Link="log4net.config">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Include="..\..\Shared\configs\zookeeper.json" Link="configs\zookeeper.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
 
   <ItemGroup>
     <Folder Include="Properties\" />

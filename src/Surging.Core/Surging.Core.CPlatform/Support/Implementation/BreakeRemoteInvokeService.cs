@@ -51,24 +51,19 @@ namespace Surging.Core.CPlatform.Support.Implementation
             var command = vt.IsCompletedSuccessfully ? vt.Result : await vt;
             var intervalSeconds = (DateTime.Now - serviceInvokeInfos.FinalRemoteInvokeTime).TotalSeconds;
             bool reachConcurrentRequest() => serviceInvokeInfos.ConcurrentRequests > command.MaxConcurrentRequests;
-            bool reachRequestVolumeThreshold() => intervalSeconds <= 10
-                && serviceInvokeInfos.SinceFaultRemoteServiceRequests > command.BreakerRequestVolumeThreshold;
-            bool reachErrorThresholdPercentage() =>
-                (double)serviceInvokeInfos.FaultRemoteServiceRequests / (double)(serviceInvokeInfos.RemoteServiceRequests ?? 1) * 100 > command.BreakeErrorThresholdPercentage;
+            bool reachRequestVolumeThreshold() => intervalSeconds <= 10 && serviceInvokeInfos.SinceFaultRemoteServiceRequests > command.BreakerRequestVolumeThreshold;
+            bool reachErrorThresholdPercentage() 
+            {
+                var errorThresholdPercent = serviceInvokeInfos.FaultRemoteServiceRequests / (serviceInvokeInfos.RemoteServiceRequests ?? 1) * 100;
+                return errorThresholdPercent > command.BreakeErrorThresholdPercentage && serviceInvokeInfos.RemoteServiceRequests.HasValue && serviceInvokeInfos.RemoteServiceRequests.Value > 1;
+            }
+
             var item = GetHashItem(command, parameters);
             if (command.BreakerForceClosed)
             {
                 _serviceInvokeListenInfo.AddOrUpdate(serviceId, new ServiceInvokeListenInfo(), (k, v) => { v.LocalServiceRequests++; return v; });
-                if (reachConcurrentRequest() || reachRequestVolumeThreshold() || reachErrorThresholdPercentage())
-                {
-                    return await MonitorRemoteInvokeAsync(parameters, serviceId, serviceKey, decodeJOject, command.ExecutionTimeoutInMilliseconds, item, true);
-                }
-                else
-                {
-                    var breakeSeconds = Math.Round((command.BreakeSleepWindowInMilliseconds - intervalSeconds * 1000) / 1000, 0);
-                    return new RemoteInvokeResultMessage() { ExceptionMessage = $"当前没有可用的服务{serviceId}-{serviceKey},请稍后{breakeSeconds}s后重试", StatusCode = StatusCode.ServiceUnavailability };
-                }
-                
+                return await MonitorRemoteInvokeAsync(parameters, serviceId, serviceKey, decodeJOject, command.ExecutionTimeoutInMilliseconds, item);
+
             }
             else
             {
@@ -76,17 +71,17 @@ namespace Surging.Core.CPlatform.Support.Implementation
                 {
                     if (intervalSeconds * 1000 > command.BreakeSleepWindowInMilliseconds)
                     {
-                        return await MonitorRemoteInvokeAsync(parameters, serviceId, serviceKey, decodeJOject, command.ExecutionTimeoutInMilliseconds, item, true);
+                        return await MonitorRemoteInvokeAsync(parameters, serviceId, serviceKey, decodeJOject, command.ExecutionTimeoutInMilliseconds, item);
                     }
                     else
                     {
                         _serviceInvokeListenInfo.AddOrUpdate(serviceId, new ServiceInvokeListenInfo(), (k, v) => { v.LocalServiceRequests++; return v; });
-                        if (_logger.IsEnabled(LogLevel.Debug)) {
+                        if (_logger.IsEnabled(LogLevel.Debug))
+                        {
                             _logger.LogDebug("当前服务{serviceId}-{serviceKey}当前不可用,请稍后重试");
                         }
-                        var breakeSeconds = Math.Round((command.BreakeSleepWindowInMilliseconds - intervalSeconds * 1000) / 1000,0);
-                        return new RemoteInvokeResultMessage() { ExceptionMessage = $"当前没有可用的服务{serviceId}-{serviceKey},请稍后{breakeSeconds}s后重试", StatusCode = StatusCode.ServiceUnavailability };
-                        //return null；
+                        var breakeSeconds = Math.Round((command.BreakeSleepWindowInMilliseconds - intervalSeconds * 1000) / 1000, 0);
+                        return new RemoteInvokeResultMessage() { ExceptionMessage = $"当前没有可用的服务{serviceId}-{serviceKey},请稍后{breakeSeconds}s后重试", StatusCode = StatusCode.ServiceUnavailability };                 
                     }
                 }
                 else
@@ -96,7 +91,7 @@ namespace Surging.Core.CPlatform.Support.Implementation
             }
         }
 
-        private async Task<RemoteInvokeResultMessage> MonitorRemoteInvokeAsync(IDictionary<string, object> parameters, string serviceId, string serviceKey, bool decodeJOject, int requestTimeout, string item, bool isRetry = false)
+        private async Task<RemoteInvokeResultMessage> MonitorRemoteInvokeAsync(IDictionary<string, object> parameters, string serviceId, string serviceKey, bool decodeJOject, int requestTimeout, string item)
         {
             CancellationTokenSource source = new CancellationTokenSource();
             var token = source.Token;
@@ -121,7 +116,7 @@ namespace Surging.Core.CPlatform.Support.Implementation
                 {
                     Item = item,
                     InvokeMessage = invokeMessage
-                }, requestTimeout, isRetry);
+                }, requestTimeout);
                 _serviceInvokeListenInfo.AddOrUpdate(serviceId, new ServiceInvokeListenInfo(), (k, v) =>
                 {
                     v.SinceFaultRemoteServiceRequests = 0;
@@ -131,21 +126,31 @@ namespace Surging.Core.CPlatform.Support.Implementation
             }
             catch (Exception ex)
             {
-                _serviceInvokeListenInfo.AddOrUpdate(serviceId, new ServiceInvokeListenInfo(), (k, v) =>
-                {
-                    ++v.FaultRemoteServiceRequests;
-                    ++v.SinceFaultRemoteServiceRequests;
-                    --v.ConcurrentRequests;
-                    return v;
-                });
+                
                 await ExecuteExceptionFilter(ex, invokeMessage, token);
-                if (ex.InnerException != null && ex.InnerException is BusinessException) {
+                if ((ex.InnerException != null && ex.InnerException is BusinessException) || ex is BusinessException)
+                {
+                    _serviceInvokeListenInfo.AddOrUpdate(serviceId, new ServiceInvokeListenInfo(), (k, v) =>
+                    {
+                        --v.ConcurrentRequests;
+                        return v;
+                    });
                     return new RemoteInvokeResultMessage()
                     {
                         ExceptionMessage = ex.InnerException.GetExceptionMessage(),
                         Result = null,
                         StatusCode = ex.InnerException.GetGetExceptionStatusCode()
                     };
+                }
+                else 
+                {
+                    _serviceInvokeListenInfo.AddOrUpdate(serviceId, new ServiceInvokeListenInfo(), (k, v) =>
+                    {
+                        ++v.FaultRemoteServiceRequests;
+                        ++v.SinceFaultRemoteServiceRequests;
+                        --v.ConcurrentRequests;                        
+                        return v;
+                    });
                 }
 
                 return new RemoteInvokeResultMessage()

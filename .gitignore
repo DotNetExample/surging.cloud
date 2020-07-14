@@ -269,4 +269,5 @@ _site/
 
 .mysql/
 **/logs/
+**/log.*
 

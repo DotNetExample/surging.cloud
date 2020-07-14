@@ -26,6 +26,7 @@ namespace Surging.Core.Zookeeper.Configurations
             string chRoot = null,
             bool reloadOnChange = false, bool enableChildrenMonitor = false) : this(connectionString,
                 TimeSpan.FromSeconds(20),
+                TimeSpan.FromSeconds(10),
                 routePath,
                 subscriberPath,
                 commandPath,
@@ -47,7 +48,7 @@ namespace Surging.Core.Zookeeper.Configurations
         /// <param name="cachePath">缓存中心配置路径</param>
         /// <param name="mqttRoutePath">mqtt路由配置路径</param>
         /// <param name="chRoot">根节点。</param>
-        public ConfigInfo(string connectionString, TimeSpan sessionTimeout, string routePath = "/services/serviceRoutes",
+        public ConfigInfo(string connectionString, TimeSpan sessionTimeout, TimeSpan connectionTimeout, string routePath = "/services/serviceRoutes",
             string subscriberPath = "/services/serviceSubscribers",
             string commandPath = "/services/serviceCommands",
             string cachePath = "/services/serviceCaches",
@@ -63,6 +64,7 @@ namespace Surging.Core.Zookeeper.Configurations
             ConnectionString = connectionString;
             RoutePath = routePath;
             SessionTimeout = sessionTimeout;
+            ConnectionTimeout = connectionTimeout;
             MqttRoutePath = mqttRoutePath;
             EnableChildrenMonitor = enableChildrenMonitor;
             if (!string.IsNullOrEmpty(connectionString))
@@ -112,6 +114,11 @@ namespace Surging.Core.Zookeeper.Configurations
         /// 会话超时时间。
         /// </summary>
         public TimeSpan SessionTimeout { get; set; }
+
+        /// <summary>
+        /// 连接超时时间
+        /// </summary>
+        public TimeSpan ConnectionTimeout { get; set; }
 
         /// <summary>
         /// 根节点。

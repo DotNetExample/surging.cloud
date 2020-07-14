@@ -113,14 +113,19 @@ namespace Surging.Core.ApiGateWay.OAuth
 
         public object GetPayload(string token)
         {
-            string result = null;
+            var payload = string.Empty;
             var jwtToken = token.Split('.');
             if (jwtToken.Length == 3)
             {
 
-                result = Encoding.UTF8.GetString(Convert.FromBase64String(jwtToken[1]));
+                payload = Encoding.UTF8.GetString(Convert.FromBase64String(jwtToken[1]));
             }
-            return JsonConvert.DeserializeObject(result);
+            var payloadObject = JsonConvert.DeserializeObject(payload);
+            if (payloadObject is string) 
+            {
+                return JsonConvert.DeserializeObject(payloadObject.ToString());
+            }
+            return payloadObject;
         }
     }
 }

@@ -37,7 +37,7 @@ namespace Surging.Core.CPlatform.Runtime.Client.Address.Resolvers.Implementation
         /// </summary>
         /// <param name="context">地址选择上下文。</param>
         /// <returns>地址模型。</returns>
-        protected override async ValueTask<AddressModel> SelectAsync(AddressSelectContext context)
+        protected override async Task<AddressModel> SelectAsync(AddressSelectContext context)
         {
             var key = GetCacheKey(context.Descriptor);
             var addressEntry = _concurrent.GetOrAdd(key, k =>
@@ -52,7 +52,7 @@ namespace Surging.Core.CPlatform.Runtime.Client.Address.Resolvers.Implementation
                 return hash;
             });
             AddressModel addressModel; 
-            var IsHealth = false;
+            var isHealth = false;
             var index = 0;
             var count = context.Address.Count();
             do
@@ -64,14 +64,14 @@ namespace Surging.Core.CPlatform.Runtime.Client.Address.Resolvers.Implementation
                     break;
                 }
                 index++;
-                IsHealth = await _healthCheckService.IsHealth(addressModel);
-                if(!IsHealth)
+                isHealth = await _healthCheckService.IsHealth(addressModel);
+                if(!isHealth)
                 {
                     addressEntry.Remove(addressModel.ToString()); 
                     _unHealths.Add(new ValueTuple<string, AddressModel>(key,addressModel));
                     _healthCheckService.Changed += ItemNode_Changed;
                 }
-            } while (!IsHealth); 
+            } while (!isHealth); 
             return addressModel;
         }
         #endregion Overrides of AddressSelectorBase

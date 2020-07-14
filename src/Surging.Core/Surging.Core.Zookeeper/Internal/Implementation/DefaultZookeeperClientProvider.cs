@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Text;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using org.apache.zookeeper;
+using Rabbit.Zookeeper;
+using Rabbit.Zookeeper.Implementation;
 using Surging.Core.CPlatform;
 using Surging.Core.CPlatform.Address;
 using Surging.Core.CPlatform.Exceptions;
@@ -13,7 +15,6 @@ using Surging.Core.CPlatform.Runtime.Client.Address.Resolvers.Implementation.Sel
 using Surging.Core.Zookeeper.Configurations;
 using Surging.Core.Zookeeper.Internal.Cluster.HealthChecks;
 using Surging.Core.Zookeeper.Internal.Cluster.Implementation.Selectors;
-using Surging.Core.Zookeeper.WatcherProvider;
 using Level = Microsoft.Extensions.Logging.LogLevel;
 
 namespace Surging.Core.Zookeeper.Internal.Implementation
@@ -24,10 +25,10 @@ namespace Surging.Core.Zookeeper.Internal.Implementation
         private readonly IHealthCheckService _healthCheckService;
         private readonly IZookeeperAddressSelector _zookeeperAddressSelector;
         private readonly ILogger<DefaultZookeeperClientProvider> _logger;
-        private readonly ConcurrentDictionary<string, IAddressSelector> _addressSelectors = new
-            ConcurrentDictionary<string, IAddressSelector>();
-        private readonly ConcurrentDictionary<AddressModel,ValueTuple<ManualResetEvent, ZooKeeper>> _zookeeperClients = new
-           ConcurrentDictionary<AddressModel, ValueTuple<ManualResetEvent, ZooKeeper>>();
+        private readonly ConcurrentDictionary<string, IAddressSelector> _addressSelectors = new ConcurrentDictionary<string, IAddressSelector>();
+        private readonly ConcurrentDictionary<AddressModel, IZookeeperClient> _zookeeperClients = new ConcurrentDictionary<AddressModel, IZookeeperClient>();
+
+
         public DefaultZookeeperClientProvider(ConfigInfo config, IHealthCheckService healthCheckService, IZookeeperAddressSelector zookeeperAddressSelector,
       ILogger<DefaultZookeeperClientProvider> logger)
         {
@@ -36,7 +37,7 @@ namespace Surging.Core.Zookeeper.Internal.Implementation
             _zookeeperAddressSelector = zookeeperAddressSelector;
             _logger = logger;
         }
-        public async ValueTask Check()
+        public async Task Check()
         {
             foreach (var address in _config.Addresses)
             {
@@ -47,10 +48,8 @@ namespace Surging.Core.Zookeeper.Internal.Implementation
             }
         }
 
-        public async ValueTask<(ManualResetEvent, ZooKeeper)> GetZooKeeper()
+        public async Task<IZookeeperClient> GetZooKeeperClient()
         {
-
-            (ManualResetEvent, ZooKeeper) result = new ValueTuple<ManualResetEvent, ZooKeeper>();
             var address = new List<AddressModel>();
             foreach (var addressModel in _config.Addresses)
             {
@@ -62,11 +61,11 @@ namespace Surging.Core.Zookeeper.Internal.Implementation
                 }
                 address.Add(addressModel);
             }
-            if (address.Count == 0)
+            if (!address.Any())
             {
                 if (_logger.IsEnabled(Level.Warning))
                     _logger.LogWarning($"找不到可用的注册中心地址。");
-                return default(ValueTuple<ManualResetEvent, ZooKeeper>);
+                throw new CPlatformException("找不到可用的Zookeeper注册中心地址");
             }
 
             var vt = _zookeeperAddressSelector.SelectAsync(new AddressSelectContext
@@ -78,44 +77,25 @@ namespace Surging.Core.Zookeeper.Internal.Implementation
             if (addr != null)
             {
                 var ipAddress = addr as IpAddressModel;
-                result = CreateZooKeeper(ipAddress);
+                return CreateZooKeeper(ipAddress);
             }
-            return result;
+            throw new CPlatformException("找不到可用的Zookeeper注册中心地址");
         }
 
-        protected (ManualResetEvent, ZooKeeper) CreateZooKeeper(IpAddressModel ipAddress)
+        protected IZookeeperClient CreateZooKeeper(IpAddressModel ipAddress)
         {
-            if (!_zookeeperClients.TryGetValue(ipAddress, out (ManualResetEvent, ZooKeeper) result))
+            if (!_zookeeperClients.TryGetValue(ipAddress, out IZookeeperClient zookeeperClient))
             {
-                var connectionWait = new ManualResetEvent(false);
-                result = new ValueTuple<ManualResetEvent, ZooKeeper>(connectionWait, new ZooKeeper($"{ipAddress.Ip}:{ipAddress.Port}", (int)_config.SessionTimeout.TotalMilliseconds
-                 , new ReconnectionWatcher(
-                      () =>
-                      {
-                          connectionWait.Set();
-                      },
-                      () =>
-                      {
-                          connectionWait.Close();
-                      },
-                      async () =>
-                      {
-                          connectionWait.Reset();
-                          if (_zookeeperClients.TryRemove(ipAddress, out (ManualResetEvent, ZooKeeper) value))
-                          { 
-                              await value.Item2.closeAsync();
-                              value.Item1.Close();
-                          }
-                          CreateZooKeeper(ipAddress);
-                      })));
-                _zookeeperClients.AddOrUpdate(ipAddress, result,(k,v)=> result);
+                var options = new ZookeeperClientOptions(ipAddress.ToString()) { ConnectionTimeout = _config.SessionTimeout, SessionTimeout = _config.SessionTimeout };
+                zookeeperClient = new ZookeeperClient(options);
+                _zookeeperClients.AddOrUpdate(ipAddress, zookeeperClient, (k,v)=> zookeeperClient);
             }
-            return result;
+            return zookeeperClient;
         }
 
-        public async ValueTask<IEnumerable<(ManualResetEvent, ZooKeeper)>> GetZooKeepers()
+        public async Task<IEnumerable<IZookeeperClient>> GetZooKeeperClients()
         {
-            var result = new List<(ManualResetEvent, ZooKeeper)>();
+            var result = new List<IZookeeperClient>();
             foreach (var address in _config.Addresses)
             {
                 var ipAddress = address as IpAddressModel;
@@ -126,6 +106,17 @@ namespace Surging.Core.Zookeeper.Internal.Implementation
                 }
             }
             return result;
+        }
+
+        public void Dispose()
+        {
+            if (_zookeeperClients.Any()) 
+            {
+                foreach (var client in _zookeeperClients) 
+                {
+                    client.Value.Dispose();
+                }
+            }
         }
     }
 }

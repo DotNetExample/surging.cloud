@@ -56,7 +56,7 @@ namespace Surging.Core.CPlatform.Runtime.Server.Implementation.ServiceDiscovery.
                     routeTemplateVal = serviceRoute.Template;
                 else if (routeTemplate.IsPrefix && serviceRoute != null)
                 {
-                    
+
                     var prefixRouteTemplate = routeTemplate.RouteTemplate;
                     if (prefixRouteTemplate.Contains("{method}", StringComparison.OrdinalIgnoreCase))
                     {
@@ -125,36 +125,42 @@ namespace Surging.Core.CPlatform.Runtime.Server.Implementation.ServiceDiscovery.
                 ParamTypes = GetParamTypes(method),
                 CacheKeys = GetCackeKeys(method),
                 Func = (key, parameters) =>
-             {
-                 object instance = null;
-                 if (AppConfig.ServerOptions.IsModulePerLifetimeScope)
-                     instance = _serviceProvider.GetInstancePerLifetimeScope(key, method.DeclaringType);
-                 else
-                     instance = _serviceProvider.GetInstances(key, method.DeclaringType);
-                 var list = new List<object>();
+                {
+                    object instance = null;
+                    if (AppConfig.ServerOptions.IsModulePerLifetimeScope)
+                        instance = _serviceProvider.GetInstancePerLifetimeScope(key, method.DeclaringType);
+                    else
+                        instance = _serviceProvider.GetInstances(key, method.DeclaringType);
+                    var list = new List<object>();
 
-                 foreach (var parameterInfo in method.GetParameters())
-                 {
-                     //加入是否有默认值的判断，有默认值，并且用户没传，取默认值
-                     if (parameterInfo.HasDefaultValue && !parameters.ContainsKey(parameterInfo.Name))
-                     {
-                         list.Add(parameterInfo.DefaultValue);
-                         continue;
-                     }
-                     var value = parameters[parameterInfo.Name];
-                     var parameterType = parameterInfo.ParameterType;
-                     var parameter = _typeConvertibleService.Convert(value, parameterType);
-                     list.Add(parameter);                    
-                 }
-                 var result = fastInvoker(instance, list.ToArray());
-                 return Task.FromResult(result);
-             }
+                    foreach (var parameterInfo in method.GetParameters())
+                    {
+                        if (parameters.ContainsKey(parameterInfo.Name))
+                        {
+                            var value = parameters[parameterInfo.Name];
+                            var parameterType = parameterInfo.ParameterType;
+                            var parameter = _typeConvertibleService.Convert(value, parameterType);
+                            list.Add(parameter);
+                        }
+                        //加入是否有默认值的判断，有默认值，并且用户没传，取默认值
+                        else if (parameterInfo.HasDefaultValue && !parameters.ContainsKey(parameterInfo.Name))
+                        {
+                            list.Add(parameterInfo.DefaultValue);
+                        }
+                        else
+                        {
+                            list.Add(null);
+                        }
+                    }
+                    var result = fastInvoker(instance, list.ToArray());
+                    return Task.FromResult(result);
+                }
             };
         }
 
         private IEnumerable<string> GetCackeKeys(MethodInfo method)
         {
-          
+
             var result = new Dictionary<int, string>();
             var parameters = method.GetParameters();
             var flag = 0;
@@ -186,14 +192,14 @@ namespace Surging.Core.CPlatform.Runtime.Server.Implementation.ServiceDiscovery.
                 }
                 flag++;
             }
-            return result.OrderBy(p => p.Key).Select(p=>p.Value);
+            return result.OrderBy(p => p.Key).Select(p => p.Value);
         }
 
         private IDictionary<string, Type> GetParamTypes(MethodInfo method)
         {
             var parameterDic = new Dictionary<string, Type>();
             var parameters = method.GetParameters();
-            foreach (var parameter in parameters) 
+            foreach (var parameter in parameters)
             {
                 parameterDic.Add(parameter.Name, parameter.ParameterType);
             }

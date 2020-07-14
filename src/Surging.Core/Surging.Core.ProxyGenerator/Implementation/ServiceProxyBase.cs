@@ -108,11 +108,6 @@ namespace Surging.Core.ProxyGenerator.Implementation
                     result = interceptReuslt.Item2 == null ? default(T) : interceptReuslt.Item2;
                 }
             }
-            //if (message != null)
-            //{
-            //    if (message.Result == null) result = message.Result;
-            //    else  result = _typeConvertibleService.Convert(message.Result, typeof(T));
-            //}
             if (message != null)
             {
                 result = GetInvokeResult<T>(message);
@@ -241,7 +236,7 @@ namespace Surging.Core.ProxyGenerator.Implementation
             }
         }
 
-        private async Task<object> CallInvokeBackFallBackRetryInvoke(IDictionary<string, object> parameters, string serviceId, ServiceCommand command, Type returnType, bool decodeJOject)
+        private async Task<object> CallInvokeBackFallBackRetryInvoke(IDictionary<string, object> parameters, string serviceId, ServiceCommand command,Type returnType,bool decodeJOject)
         {
             if (command.FallBackName != null && _serviceProvider.IsRegistered<IFallbackInvoker>(command.FallBackName) && command.Strategy == StrategyType.FallBack)
             {

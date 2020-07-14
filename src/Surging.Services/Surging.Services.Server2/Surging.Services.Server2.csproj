@@ -3,7 +3,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <ServerGarbageCollection>false</ServerGarbageCollection>
-    <TargetFramework>netcoreapp3.0</TargetFramework>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
     <TieredCompilation>true</TieredCompilation>
   </PropertyGroup>
 
@@ -65,6 +65,9 @@
     <None Include="..\..\Shared\configs\log4net.config" Link="log4net.config">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+	 <None Include="..\..\Shared\configs\zookeeper.json" Link="configs\zookeeper.json">
+	   <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	 </None>
   </ItemGroup>
 
 

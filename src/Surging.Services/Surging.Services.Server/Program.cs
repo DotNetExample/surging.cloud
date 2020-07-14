@@ -30,7 +30,7 @@ namespace Surging.Services.Server
     {
         static void Main(string[] args)
         {
-            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+            //  Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
             var host = new ServiceHostBuilder()
                 .RegisterServices(builder =>
                 {
@@ -50,7 +50,7 @@ namespace Surging.Services.Server
                     logger.AddConfiguration(
                         Core.CPlatform.AppConfig.GetSection("Logging"));
                 })
-                .UseServer(options =>{ })
+                .UseServer(options => { })
                 .UseConsoleLifetime()
                 .Configure(build =>
                 {
@@ -58,10 +58,16 @@ namespace Surging.Services.Server
 #if DEBUG
                     build.AddCacheFile("${cachePath}|/app/configs/cacheSettings.json", optional: false, reloadOnChange: true);
                     build.AddCPlatformFile("${surgingPath}|/app/configs/surgingSettings.json", optional: false, reloadOnChange: true);
+                    build.AddEventBusFile("${eventBusPath}|/app/configs/eventBusSettings.json", optional: false, reloadOnChange: true);
+                    build.AddConsulFile("${consulPath}|/app/configs/consul.json", optional: false, reloadOnChange: true);
+                    build.AddZookeeperFile("${zookeeperPath}|/app/configs/zookeeper.json", optional: false, reloadOnChange: true);
 
 #else
-                 build.AddCacheFile("${cachepath}|cacheSettings.json", basePath: AppContext.BaseDirectory, optional: false, reloadOnChange: true);
-                 build.AddCPlatformFile("${surgingpath}|surgingSettings.json", optional: false, reloadOnChange: true);
+                    build.AddCacheFile("${cachePath}|configs/cacheSettings.json", optional: false, reloadOnChange: true);
+                    build.AddCPlatformFile("${surgingPath}|configs/surgingSettings.json", optional: false, reloadOnChange: true);
+                    build.AddEventBusFile("${eventBusPath}|configs/eventBusSettings.json", optional: false);
+                    build.AddConsulFile("${consulPath}|configs/consul.json", optional: false, reloadOnChange: true);
+                    build.AddZookeeperFile("${zookeeperPath}|configs/zookeeper.json", optional: false, reloadOnChange: true);
 #endif
                 })
                 .UseStartup<Startup>()

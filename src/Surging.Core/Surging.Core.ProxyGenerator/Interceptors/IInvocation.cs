@@ -7,16 +7,16 @@ using System.Threading.Tasks;
 
 namespace Surging.Core.ProxyGenerator.Interceptors
 {
-    public interface IInvocation
+   public  interface IInvocation
     {
         object Proxy { get; }
-
+         
         string ServiceId { get; }
-
+        
         IDictionary<string, object> Arguments { get; }
 
         Type ReturnType { get; }
-
+        
         Task Proceed();
 
         object ReturnValue { get; set; }

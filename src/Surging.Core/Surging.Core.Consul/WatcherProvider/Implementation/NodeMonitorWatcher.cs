@@ -37,12 +37,17 @@ namespace Surging.Core.Consul.WatcherProvider.Implementation
             RegisterWatch(this);
             if (_allowChange!=null&&! _allowChange(_path)) return;
             var client = await _clientCall();
-            var result =await client.GetDataAsync(_path);
-            if (result != null)
+            if (client != null)
             {
-                _action(_currentData, result);
-                this.SetCurrentData(result);
+                var result = await client.GetDataAsync(_path);
+                if (result != null)
+                {
+                    _action(_currentData, result);
+                    this.SetCurrentData(result);
+                }
+
             }
+           
         }
 
         private void RegisterWatch(Watcher watcher = null)

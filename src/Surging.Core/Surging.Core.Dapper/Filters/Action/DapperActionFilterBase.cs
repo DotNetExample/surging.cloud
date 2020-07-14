@@ -9,7 +9,7 @@ using SurgingReflection = Surging.Core.CPlatform.Utilities;
 
 namespace Surging.Core.Dapper.Filters.Action
 {
-    public abstract class DapperActionFilterBase 
+    public abstract class DapperActionFilterBase
     {
         protected const int Normal = 0;
         protected const int IsDeleted = 1;

@@ -103,17 +103,12 @@ namespace Surging.Core.CPlatform
              AppConfig.ServerOptions.Protocol == CommunicationProtocol.None)
             {
                 var routeProvider = mapper.Resolve<IServiceRouteProvider>();
+                await routeProvider.RegisterRoutes(0);
                 if (AppConfig.ServerOptions.EnableRouteWatch)
                 {
-                    new ServiceRouteWatch(mapper.Resolve<CPlatformContainer>(),
-                       async () => await routeProvider.RegisterRoutes(
-                       Math.Round(Convert.ToDecimal(Process.GetCurrentProcess().TotalProcessorTime.TotalSeconds), 2, MidpointRounding.AwayFromZero)));
-                }
-                else
-                {
-                    await routeProvider.RegisterRoutes(0);
                     new ServiceRouteCompensator(mapper.Resolve<ILogger<ServiceRouteCompensator>>(), routeProvider);
                 }
+               
             }
         }
 

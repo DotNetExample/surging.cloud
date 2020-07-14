@@ -34,6 +34,6 @@ namespace Surging.Core.CPlatform.Runtime.Client.Address.Resolvers.Implementation
         /// </summary>
         /// <param name="context">地址选择上下文。</param>
         /// <returns>地址模型。</returns>
-        ValueTask<AddressModel> SelectAsync(AddressSelectContext context);
+        Task<AddressModel> SelectAsync(AddressSelectContext context);
     }
 }

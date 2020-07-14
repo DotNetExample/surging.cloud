@@ -44,6 +44,7 @@ namespace Surging.Core.KestrelHttpServer
                     Message = message
                 });
             }
+            RpcContext.RemoveContext();
         }
 
         public async Task SendAsync(TransportMessage message)

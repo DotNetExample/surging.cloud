@@ -9,10 +9,10 @@ namespace Surging.Core.Consul.Internal
 {
     public  interface IConsulClientProvider
     {
-        ValueTask<ConsulClient> GetClient();
+        Task<ConsulClient> GetClient();
 
-        ValueTask<IEnumerable<ConsulClient>> GetClients();
+        Task<IEnumerable<ConsulClient>> GetClients();
 
-        ValueTask Check();
+        Task Check();
     }
 }

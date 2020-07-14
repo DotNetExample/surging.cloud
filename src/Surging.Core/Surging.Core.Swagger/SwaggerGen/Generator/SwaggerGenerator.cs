@@ -62,10 +62,10 @@ namespace Surging.Core.SwaggerGen
             IEnumerable<ServiceEntry> entries;
             if (isOnlyGenerateLocalHostDocs != null && isOnlyGenerateLocalHostDocs.Value)
             {
-                entries = _serviceEntryProvider.GetEntries();
+                entries = _serviceEntryProvider.GetEntries().Where(p=>!p.Descriptor.DisableNetwork());
             }
             else {
-                entries = _serviceEntryProvider.GetALLEntries();
+                entries = _serviceEntryProvider.GetALLEntries().Where(p => !p.Descriptor.DisableNetwork());
             }
 
             if (mapRoutePaths != null)
@@ -80,9 +80,7 @@ namespace Surging.Core.SwaggerGen
                     }
                 }
             }
-            entries = entries
-       .Where(apiDesc => _options.DocInclusionPredicateV2(documentName, apiDesc));
-
+            entries = entries.Where(apiDesc => _options.DocInclusionPredicateV2(documentName, apiDesc));
             var schemaRegistry = _schemaRegistryFactory.Create();
 
             var swaggerDoc = new SwaggerDocument

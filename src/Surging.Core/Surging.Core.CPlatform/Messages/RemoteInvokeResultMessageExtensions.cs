@@ -18,6 +18,13 @@ namespace Surging.Core.CPlatform.Messages
                 ;
         }
 
+        public static bool IsFailedRemoteInvokeCalled(this RemoteInvokeResultMessage message)
+        {
+            return message.StatusCode == StatusCode.CommunicationError
+                || message.StatusCode == StatusCode.ServiceUnavailability
+                ;
+        }
+
         public static Exception GetExceptionByStatusCode(this RemoteInvokeResultMessage message)
         {
             Exception exception = null;

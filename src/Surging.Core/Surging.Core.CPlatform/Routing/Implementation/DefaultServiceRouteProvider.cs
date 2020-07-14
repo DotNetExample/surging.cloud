@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
+using Surging.Core.CPlatform.Exceptions;
 using Surging.Core.CPlatform.Runtime.Server;
 using Surging.Core.CPlatform.Transport.Implementation;
 using Surging.Core.CPlatform.Utilities;
@@ -53,7 +54,7 @@ namespace Surging.Core.CPlatform.Routing.Implementation
             return route;
         }
 
-        public ValueTask<ServiceRoute> GetLocalRouteByPath(string path)
+        public async Task<ServiceRoute> GetLocalRouteByPath(string path)
         {
             var addess = NetUtils.GetHostAddress();
 
@@ -74,16 +75,16 @@ namespace Surging.Core.CPlatform.Routing.Implementation
             _serviceRoute.TryGetValue(path, out ServiceRoute route);
             if (route == null)
             {
-                return new ValueTask<ServiceRoute>(GetRouteByRegexPathAsync(_localRoutes, path));
+                return await GetRouteByRegexPathAsync(_localRoutes, path);
             }
             else
             {
-                return new ValueTask<ServiceRoute>(route);
+                return route;
             }
 
         }
 
-        public ValueTask<ServiceRoute> GetLocalRouteByRegexPath(string path)
+        public async Task<ServiceRoute> GetLocalRouteByRegexPath(string path)
         {
             var addess = NetUtils.GetHostAddress();
 
@@ -104,35 +105,7 @@ namespace Surging.Core.CPlatform.Routing.Implementation
             _serviceRoute.TryGetValue(path, out ServiceRoute route);
             if (route == null)
             {
-                return new ValueTask<ServiceRoute>(GetRouteByRegexPathAsync(_localRoutes, path));
-            }
-            else
-            {
-                return new ValueTask<ServiceRoute>(route);
-            }
-        }
-
-        public ValueTask<ServiceRoute> GetRouteByPath(string path)
-        {
-            _serviceRoute.TryGetValue(path.ToLower(), out ServiceRoute route);
-            if (route == null)
-            {
-                return new ValueTask<ServiceRoute>(GetRouteByPathAsync(path));
-            }
-            else
-            {
-                return new ValueTask<ServiceRoute>(route);
-            }
-        }
-
-        public async ValueTask<ServiceRoute> GetRouteByRegexPath(string path)
-        {
-            path = path.ToLower();
-            _serviceRoute.TryGetValue(path, out ServiceRoute route);
-            if (route == null)
-            {
-                var routes = await _serviceRouteManager.GetRoutesAsync();
-                return await GetRouteByRegexPathAsync(routes, path);
+                return await GetRouteByRegexPathAsync(_localRoutes, path);
             }
             else
             {
@@ -140,25 +113,50 @@ namespace Surging.Core.CPlatform.Routing.Implementation
             }
         }
 
-        public async ValueTask<ServiceRoute> GetRouteByPathOrRegexPath(string path) 
+        public async Task<ServiceRoute>  GetRouteByPath(string path)
         {
-            var route = await GetRouteByPath(path);
+            _serviceRoute.TryGetValue(path.ToLower(), out ServiceRoute route);
             if (route == null)
             {
-                route = await GetRouteByRegexPath(path);
+                return await GetRouteByPathAsync(path);
             }
             return route;
         }
 
-        public async ValueTask<ServiceRoute> GetLocalRouteByPathOrRegexPath(string path) 
+        public async Task<ServiceRoute> GetRouteByRegexPath(string path)
         {
-            var route = await GetLocalRouteByPath(path);
+            path = path.ToLower();
+            _serviceRoute.TryGetValue(path, out ServiceRoute route);
             if (route == null)
             {
-                route = await GetLocalRouteByRegexPath(path);
+                route = await _serviceRouteManager.GetRouteByPathAsync(path);
+                if (route == null)
+                {
+                    if (_logger.IsEnabled(LogLevel.Warning))
+                    {
+                        _logger.LogWarning($"根据服务路由路径：{path}，找不到相关服务信息。");
+                        if (route == null)
+                        {
+                            throw new CPlatformException($"根据服务路由路径：{path}，找不到相关服务信息。");
+                        }
+                    }
+
+                }
+                return route;
             }
+            else
+            {
+                return route;
+            }
+        }
+
+        public async Task<ServiceRoute> GetRouteByPathOrRegexPath(string path) 
+        {
+            var route = await GetRouteByPath(path);
+          
             return route;
         }
+
 
         public async Task<ServiceRoute> SearchRoute(string path)
         {
@@ -205,29 +203,34 @@ namespace Surging.Core.CPlatform.Routing.Implementation
 
         private async Task<ServiceRoute> SearchRouteAsync(string path)
         {
-            var routes = await _serviceRouteManager.GetRoutesAsync();
-            var route = routes.FirstOrDefault(i => String.Compare(i.ServiceDescriptor.RoutePath, path, true) == 0);
+            var route = await _serviceRouteManager.GetRouteByPathAsync(path);
             if (route == null)
             {
                 if (_logger.IsEnabled(LogLevel.Warning))
                     _logger.LogWarning($"根据服务路由路径：{path}，找不到相关服务信息。");
+                return null;
             }
             else
+            {
                 _serviceRoute.GetOrAdd(path, route);
+            }
             return route;
         }
 
         private async Task<ServiceRoute> GetRouteByPathAsync(string path)
         {
-            var routes = await _serviceRouteManager.GetRoutesAsync();
-            var route = routes.FirstOrDefault(i => String.Compare(i.ServiceDescriptor.RoutePath, path, true) == 0 && !i.ServiceDescriptor.GetMetadata<bool>("IsOverload"));
+            var route = await _serviceRouteManager.GetRouteByPathAsync(path);
             if (route == null)
             {
                 if (_logger.IsEnabled(LogLevel.Warning))
                     _logger.LogWarning($"根据服务路由路径：{path}，找不到相关服务信息。");
+                return null;
             }
+            
             else
+            {
                 _serviceRoute.GetOrAdd(path, route);
+            }      
             return route;
         }
 

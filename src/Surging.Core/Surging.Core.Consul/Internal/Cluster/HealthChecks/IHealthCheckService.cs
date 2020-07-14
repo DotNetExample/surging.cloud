@@ -10,6 +10,6 @@ namespace Surging.Core.Consul.Internal.Cluster.HealthChecks
     {
         void Monitor(AddressModel address);
          
-        ValueTask<bool> IsHealth(AddressModel address);
+        Task<bool> IsHealth(AddressModel address);
     }
 }

@@ -74,17 +74,20 @@ namespace Surging.Core.KestrelHttpServer
             try
             {
                 httpMessage = message.GetContent<HttpMessage>();
+                if (httpMessage.Attachments != null)
+                {
+                    foreach (var attachment in httpMessage.Attachments)
+                    {
+                        RpcContext.GetContext().SetAttachment(attachment.Key, attachment.Value);
+                    }
+                }
             }
             catch (Exception exception)
             {
                 _logger.LogError(exception, "将接收到的消息反序列化成 TransportMessage<httpMessage> 时发送了错误。");
                 return;
             }
-            if (httpMessage.Attachments != null)
-            {
-                foreach (var attachment in httpMessage.Attachments)
-                    RpcContext.GetContext().SetAttachment(attachment.Key, attachment.Value);
-            }
+           
             WirteDiagnosticBefore(message);
             var entry = _serviceEntryLocate.Locate(httpMessage);
 
@@ -184,6 +187,7 @@ namespace Surging.Core.KestrelHttpServer
                     _logger.LogDebug("准备发送响应消息。");
 
                 await sender.SendAndFlushAsync(new TransportMessage(messageId,resultMessage));
+
                 if (_logger.IsEnabled(LogLevel.Debug))
                     _logger.LogDebug("响应消息发送成功。");
             }
@@ -227,7 +231,7 @@ namespace Surging.Core.KestrelHttpServer
             else
             {
                 var parameters = RpcContext.GetContext().GetContextParameters();
-                parameters.TryRemove("RemoteIpAddress", out object value);
+                parameters.Remove("RemoteIpAddress");
                 RpcContext.GetContext().SetContextParameters(parameters);
             }
 

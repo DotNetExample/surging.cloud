@@ -18,10 +18,6 @@ namespace Surging.Core.CPlatform.Address
         [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
         public decimal ProcessorTime { get; set; }
 
-        public bool IsHealth { get; set; } = true;
-
-        public int UnhealthyTimes { get; set; }
-
         /// <summary>
         /// 重写后的标识。
         /// </summary>

@@ -9,8 +9,8 @@ namespace Surging.Core.CPlatform.Configurations.Watch
 {
     public class ConfigurationWatchManager: IConfigurationWatchManager
     {
-        internal   HashSet<ConfigurationWatch> dataWatches =
-            new  HashSet<ConfigurationWatch>();
+        internal HashSet<ConfigurationWatch> dataWatches = new HashSet<ConfigurationWatch>();
+
         private readonly Timer _timer;
         private readonly ILogger<ConfigurationWatchManager> _logger;
 
@@ -24,7 +24,7 @@ namespace Surging.Core.CPlatform.Configurations.Watch
             }, null, timeSpan, timeSpan);
         }
 
-        public  HashSet<ConfigurationWatch> DataWatches
+        public HashSet<ConfigurationWatch> DataWatches
         {
             get
             {

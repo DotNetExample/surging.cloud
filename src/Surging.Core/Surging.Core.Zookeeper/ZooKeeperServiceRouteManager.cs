@@ -1,9 +1,11 @@
 ﻿using Microsoft.Extensions.Logging;
 using org.apache.zookeeper;
+using Rabbit.Zookeeper;
 using Surging.Core.CPlatform.Address;
 using Surging.Core.CPlatform.Routing;
 using Surging.Core.CPlatform.Routing.Implementation;
 using Surging.Core.CPlatform.Serialization;
+using Surging.Core.CPlatform.Support;
 using Surging.Core.CPlatform.Transport.Implementation;
 using Surging.Core.CPlatform.Utilities;
 using Surging.Core.Zookeeper.Configurations;
@@ -14,8 +16,10 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using static org.apache.zookeeper.KeeperException;
 
 namespace Surging.Core.Zookeeper
 {
@@ -27,7 +31,7 @@ namespace Surging.Core.Zookeeper
         private readonly ILogger<ZooKeeperServiceRouteManager> _logger;
         private ServiceRoute[] _routes;
         private readonly IZookeeperClientProvider _zookeeperClientProvider;
-
+        private IDictionary<string, NodeMonitorWatcher> nodeWatchers = new Dictionary<string, NodeMonitorWatcher>();
         public ZooKeeperServiceRouteManager(ConfigInfo configInfo, ISerializer<byte[]> serializer,
             ISerializer<string> stringSerializer, IServiceRouteFactory serviceRouteFactory,
             ILogger<ZooKeeperServiceRouteManager> logger, IZookeeperClientProvider zookeeperClientProvider) : base(stringSerializer)
@@ -59,8 +63,8 @@ namespace Surging.Core.Zookeeper
         {
             if (_logger.IsEnabled(LogLevel.Information))
                 _logger.LogInformation("准备清空所有路由配置。");
-            var zooKeepers = await _zookeeperClientProvider.GetZooKeepers();
-            foreach (var zooKeeper in zooKeepers)
+            var zooKeeperClients = await _zookeeperClientProvider.GetZooKeeperClients();
+            foreach (var zooKeeperClient in zooKeeperClients)
             {
                 var path = _configInfo.RoutePath;
                 var childrens = path.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
@@ -70,22 +74,26 @@ namespace Surging.Core.Zookeeper
                 {
                     var nodePath = "/" + string.Join("/", childrens);
 
-                    if (await zooKeeper.Item2.existsAsync(nodePath) != null)
+                    if (await zooKeeperClient.ExistsAsync(nodePath))
                     {
-                        var result = await zooKeeper.Item2.getChildrenAsync(nodePath);
-                        if (result?.Children != null)
+                        var children = (await zooKeeperClient.GetChildrenAsync(nodePath)).ToArray();
+                        if (children != null && childrens.Any())
                         {
-                            foreach (var child in result.Children)
+                            foreach (var child in children)
                             {
                                 var childPath = $"{nodePath}/{child}";
                                 if (_logger.IsEnabled(LogLevel.Debug))
                                     _logger.LogDebug($"准备删除：{childPath}。");
-                                await zooKeeper.Item2.deleteAsync(childPath);
+                                if (await zooKeeperClient.ExistsAsync(childPath)) 
+                                {
+                                    await zooKeeperClient.DeleteAsync(childPath);
+                                }
+                                
                             }
                         }
                         if (_logger.IsEnabled(LogLevel.Debug))
                             _logger.LogDebug($"准备删除：{nodePath}。");
-                        await zooKeeper.Item2.deleteAsync(nodePath);
+                        await zooKeeperClient.DeleteAsync(nodePath);
                     }
                     index++;
                     childrens = childrens.Take(childrens.Length - index).ToArray();
@@ -104,10 +112,10 @@ namespace Surging.Core.Zookeeper
         {
             if (_logger.IsEnabled(LogLevel.Information))
                 _logger.LogInformation("准备添加服务路由。");
-            var zooKeepers = await _zookeeperClientProvider.GetZooKeepers();
-            foreach (var zooKeeper in zooKeepers)
+            var zooKeeperClients = await _zookeeperClientProvider.GetZooKeeperClients();
+            foreach (var zooKeeperClient in zooKeeperClients)
             {
-                await CreateSubdirectory(zooKeeper,_configInfo.RoutePath);
+                await CreateSubdirectory(zooKeeperClient,_configInfo.RoutePath);
 
                 var path = _configInfo.RoutePath;
                 if (!path.EndsWith("/"))
@@ -119,26 +127,67 @@ namespace Surging.Core.Zookeeper
                 {
                     var nodePath = $"{path}{serviceRoute.ServiceDescriptor.Id}";
                     var nodeData = _serializer.Serialize(serviceRoute);
-                    if (await zooKeeper.Item2.existsAsync(nodePath) == null)
+                    var watcher = nodeWatchers.GetOrAdd(nodePath, f => new NodeMonitorWatcher(path, async (oldData, newData) => await NodeChange(oldData, newData)));
+                    await zooKeeperClient.SubscribeDataChange(nodePath, watcher.HandleNodeDataChange);
+                    if (!await zooKeeperClient.ExistsAsync(nodePath))
                     {
                         if (_logger.IsEnabled(LogLevel.Debug))
                             _logger.LogDebug($"节点：{nodePath}不存在将进行创建。");
 
-                        await zooKeeper.Item2.createAsync(nodePath, nodeData, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+                        await zooKeeperClient.CreateAsync(nodePath, nodeData, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
                     }
                     else
                     {
                         if (_logger.IsEnabled(LogLevel.Debug))
                             _logger.LogDebug($"将更新节点：{nodePath}的数据。");
 
-                        var onlineData = (await zooKeeper.Item2.getDataAsync(nodePath)).Data;
+                        var onlineData = (await zooKeeperClient.GetDataAsync(nodePath)).ToArray();
                         if (!DataEquals(nodeData, onlineData))
-                            await zooKeeper.Item2.setDataAsync(nodePath, nodeData);
+                            await zooKeeperClient.SetDataAsync(nodePath, nodeData);
                     }
                 }
                 if (_logger.IsEnabled(LogLevel.Information))
                     _logger.LogInformation("服务路由添加成功。");
             }
+        }
+
+        protected override async Task SetRouteAsync(ServiceRouteDescriptor route)
+        {
+            if (_logger.IsEnabled(LogLevel.Information))
+                _logger.LogInformation("准备添加服务路由。");
+            var zooKeeperClients = await _zookeeperClientProvider.GetZooKeeperClients();
+            foreach (var zooKeeperClient in zooKeeperClients)
+            {
+                await CreateSubdirectory(zooKeeperClient, _configInfo.RoutePath);
+
+                var path = _configInfo.RoutePath;
+                if (!path.EndsWith("/"))
+                    path += "/";
+
+                var nodePath = $"{path}{route.ServiceDescriptor.Id}";
+                var nodeData = _serializer.Serialize(route);
+                var watcher = nodeWatchers.GetOrAdd(nodePath, f => new NodeMonitorWatcher(path, async (oldData, newData) => await NodeChange(oldData, newData)));
+                await zooKeeperClient.SubscribeDataChange(nodePath, watcher.HandleNodeDataChange);
+                if (!await zooKeeperClient.ExistsAsync(nodePath))
+                {
+                    if (_logger.IsEnabled(LogLevel.Debug))
+                        _logger.LogDebug($"节点：{nodePath}不存在将进行创建。");
+
+                    await zooKeeperClient.CreateAsync(nodePath, nodeData, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+                }
+                else
+                {
+                    if (_logger.IsEnabled(LogLevel.Debug))
+                        _logger.LogDebug($"将更新节点：{nodePath}的数据。");
+
+                    var onlineData = (await zooKeeperClient.GetDataAsync(nodePath)).ToArray();
+                    if (!DataEquals(nodeData, onlineData))
+                        await zooKeeperClient.SetDataAsync(nodePath, nodeData);
+                }
+                if (_logger.IsEnabled(LogLevel.Information))
+                    _logger.LogInformation("服务路由添加成功。");
+            }
+
         }
 
         public override async Task RemveAddressAsync(IEnumerable<AddressModel> Address)
@@ -150,49 +199,64 @@ namespace Surging.Core.Zookeeper
             }
             await base.SetRoutesAsync(routes);
         }
-        protected override async Task SetRouteAsync(ServiceRouteDescriptor route)
+
+        public override async Task<ServiceRoute> GetRouteByPathAsync(string path)
         {
-            if (_logger.IsEnabled(LogLevel.Information))
-                _logger.LogInformation("准备添加服务路由。");
-            var zooKeepers = await _zookeeperClientProvider.GetZooKeepers();
-            foreach (var zooKeeper in zooKeepers)
+            var route = await GetRouteByPathFormCacheAsync(path);
+            if (route == null && !_mapRoutePathOptions.Any(p => p.TargetRoutePath == path))
             {
-                await CreateSubdirectory(zooKeeper, _configInfo.RoutePath);
-
-                var path = _configInfo.RoutePath;
-                if (!path.EndsWith("/"))
-                    path += "/";
-
-
-                var nodePath = $"{path}{route.ServiceDescriptor.Id}";
-                var nodeData = _serializer.Serialize(route);
-                if (await zooKeeper.Item2.existsAsync(nodePath) == null)
-                {
-                    if (_logger.IsEnabled(LogLevel.Debug))
-                        _logger.LogDebug($"节点：{nodePath}不存在将进行创建。");
-
-                    await zooKeeper.Item2.createAsync(nodePath, nodeData, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
-                }
-                else
-                {
-                    if (_logger.IsEnabled(LogLevel.Debug))
-                        _logger.LogDebug($"将更新节点：{nodePath}的数据。");
-
-                    var onlineData = (await zooKeeper.Item2.getDataAsync(nodePath)).Data;
-                    if (!DataEquals(nodeData, onlineData))
-                        await zooKeeper.Item2.setDataAsync(nodePath, nodeData);
-                }
-                if (_logger.IsEnabled(LogLevel.Information))
-                    _logger.LogInformation("服务路由添加成功。");
+                await EnterRoutes(true);
+                return await GetRouteByPathFormCacheAsync(path);
             }
+            return route;
+        }
 
+        private async Task<ServiceRoute> GetRouteByPathFormCacheAsync(string path)
+        {
+            if (_routes != null && _routes.Any(p => p.ServiceDescriptor.RoutePath == path))
+            {
+                return _routes.First(p => p.ServiceDescriptor.RoutePath == path);
+            }
+            return await GetRouteByRegexPathAsync(path);
+           
+        }
+
+        private async Task<ServiceRoute> GetRouteByRegexPathAsync(string path)
+        {
+            var pattern = "/{.*?}";
+            var route = _routes.FirstOrDefault(i =>
+            {
+                var routePath = Regex.Replace(i.ServiceDescriptor.RoutePath, pattern, "");
+                var newPath = path.Replace(routePath, "");
+                return (newPath.StartsWith("/") || newPath.Length == 0) && i.ServiceDescriptor.RoutePath.Split("/").Length == path.Split("/").Length && !i.ServiceDescriptor.GetMetadata<bool>("IsOverload")
+                ;
+            });
+
+
+            if (route == null)
+            {
+                if (_logger.IsEnabled(LogLevel.Warning))
+                    _logger.LogWarning($"根据服务路由路径：{path}，找不到相关服务信息。");
+            }
+            return route;
+        }
+
+
+        public override async Task<ServiceRoute> GetRouteByServiceIdAsync(string serviceId)
+        {
+            if (_routes != null && _routes.Any(p => p.ServiceDescriptor.Id == serviceId))
+            {
+                return _routes.First(p => p.ServiceDescriptor.Id == serviceId);
+            }
+            await EnterRoutes(true);
+            return _routes.FirstOrDefault(p => p.ServiceDescriptor.Id == serviceId);
         }
 
         public override async Task SetRoutesAsync(IEnumerable<ServiceRoute> routes)
         {
             var hostAddr = NetUtils.GetHostAddress();
             var serviceRoutes = await GetRoutes(routes.Select(p => p.ServiceDescriptor.Id));
-            if (serviceRoutes.Count() > 0)
+            if (serviceRoutes.Any())
             {
                 foreach (var route in routes)
                 {
@@ -211,7 +275,7 @@ namespace Surging.Core.Zookeeper
                     }
                 }
             }
-            await RemoveExceptRoutesAsync(routes, hostAddr);
+            //await RemoveExceptRoutesAsync(routes, hostAddr);
             await base.SetRoutesAsync(routes);
         }
 
@@ -221,31 +285,31 @@ namespace Surging.Core.Zookeeper
             if (!path.EndsWith("/"))
                 path += "/";
             routes = routes.ToArray();
-            var zooKeepers = await _zookeeperClientProvider.GetZooKeepers();
+            var zooKeepers = await _zookeeperClientProvider.GetZooKeeperClients();
             foreach (var zooKeeper in zooKeepers)
             {
                 if (_routes != null)
                 {
-                    var oldRouteIds = _routes.Select(i => i.ServiceDescriptor.Id).ToArray();
+                    var oldRouteIds = _routes.Where(p=> !p.Address.Any()).Select(i => i.ServiceDescriptor.Id).ToArray();
                     var newRouteIds = routes.Select(i => i.ServiceDescriptor.Id).ToArray();
                     var deletedRouteIds = oldRouteIds.Except(newRouteIds).ToArray();
                     foreach (var deletedRouteId in deletedRouteIds)
                     {
-                        var addresses = _routes.Where(p => p.ServiceDescriptor.Id == deletedRouteId).Select(p => p.Address).FirstOrDefault();
-                        if (addresses.Contains(hostAddr))
+                        var addresses = _routes.Where(p => p.ServiceDescriptor.Id == deletedRouteId).Select(p => p.Address).First();
+                        var nodePath = $"{path}{deletedRouteId}";
+                        if (await zooKeeper.ExistsAsync(nodePath))
                         {
-                            var nodePath = $"{path}{deletedRouteId}";
-                            await zooKeeper.Item2.deleteAsync(nodePath);
+                            await zooKeeper.DeleteAsync(nodePath);
                         }
                     }
                 }
             }
         }
 
-        private async Task CreateSubdirectory((ManualResetEvent, ZooKeeper) zooKeeper,  string path)
+        private async Task CreateSubdirectory(IZookeeperClient zooKeeperClient,  string path)
         {
-            zooKeeper.Item1.WaitOne();
-            if (await zooKeeper.Item2.existsAsync(path) != null)
+         
+            if (await zooKeeperClient.ExistsAsync(path))
                 return;
 
             if (_logger.IsEnabled(LogLevel.Information))
@@ -257,9 +321,9 @@ namespace Surging.Core.Zookeeper
             foreach (var children in childrens)
             {
                 nodePath += children;
-                if (await zooKeeper.Item2.existsAsync(nodePath) == null)
+                if (!await zooKeeperClient.ExistsAsync(nodePath))
                 {
-                    await zooKeeper.Item2.createAsync(nodePath, null, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+                    await zooKeeperClient.CreateAsync(nodePath, null, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
                 }
                 nodePath += "/";
             }
@@ -270,7 +334,7 @@ namespace Surging.Core.Zookeeper
             if (_logger.IsEnabled(LogLevel.Debug))
                 _logger.LogDebug($"准备转换服务路由，配置内容：{Encoding.UTF8.GetString(data)}。");
 
-            if (data == null)
+            if (data == null || data.Length <= 0)
                 return null;
 
             var descriptor = _serializer.Deserialize<byte[], ServiceRouteDescriptor>(data);
@@ -280,13 +344,12 @@ namespace Surging.Core.Zookeeper
         private async Task<ServiceRoute> GetRoute(string path)
         {
             ServiceRoute result = null;
-            var zooKeeper = await GetZooKeeper();
-            var watcher = new NodeMonitorWatcher(GetZooKeeper, path,
-                 async (oldData, newData) => await NodeChange(oldData, newData));
-            if (await zooKeeper.Item2.existsAsync(path) != null)
+            var zooKeeperClient = await _zookeeperClientProvider.GetZooKeeperClient();
+            if (await zooKeeperClient.StrictExistsAsync(path))
             {
-                var data = (await zooKeeper.Item2.getDataAsync(path, watcher)).Data;
-                watcher.SetCurrentData(data);
+                var data = (await zooKeeperClient.GetDataAsync(path)).ToArray();
+                var watcher = nodeWatchers.GetOrAdd(path, f => new NodeMonitorWatcher(path, async (oldData, newData) => await NodeChange(oldData, newData)));
+                await zooKeeperClient.SubscribeDataChange(path, watcher.HandleNodeDataChange);
                 result = await GetRoute(data);
             }
             return result;
@@ -299,7 +362,7 @@ namespace Surging.Core.Zookeeper
                 rootPath += "/";
 
             childrens = childrens.ToArray();
-            var routes = new List<ServiceRoute>(childrens.Count());
+            var routes = new List<ServiceRoute>();
 
             foreach (var children in childrens)
             {
@@ -317,16 +380,15 @@ namespace Surging.Core.Zookeeper
 
         private async Task EnterRoutes(bool needUpdateFromServiceCenter = false)
         {
-            if (_routes != null || !needUpdateFromServiceCenter)
-                return; 
-            var zooKeeper = await GetZooKeeper();
-            zooKeeper.Item1.WaitOne();
-            var watcher = new ChildrenMonitorWatcher(GetZooKeeper, _configInfo.RoutePath,
-             async (oldChildrens, newChildrens) => await ChildrenChange(oldChildrens, newChildrens));
-            if (await zooKeeper.Item2.existsAsync(_configInfo.RoutePath, watcher) != null)
+            if (_routes != null && _routes.Length > 0 && !(await IsNeedUpdateRoutes(_routes.Length)) && !needUpdateFromServiceCenter)
+                return;
+            var zooKeeperClient = await _zookeeperClientProvider.GetZooKeeperClient();
+            var watcher = new ChildrenMonitorWatcher(_configInfo.RoutePath,
+              async (oldChildrens, newChildrens) => await ChildrenChange(oldChildrens, newChildrens));
+            await zooKeeperClient.SubscribeChildrenChange(_configInfo.RoutePath, watcher.HandleChildrenChange);
+            if (await zooKeeperClient.StrictExistsAsync(_configInfo.RoutePath))
             {
-                var result = await zooKeeper.Item2.getChildrenAsync(_configInfo.RoutePath, watcher);
-                var childrens = result.Children.ToArray();
+                var childrens = (await zooKeeperClient.GetChildrenAsync(_configInfo.RoutePath)).ToArray();
                 watcher.SetCurrentData(childrens);
                 _routes = await GetRoutes(childrens);
             }
@@ -358,20 +420,36 @@ namespace Surging.Core.Zookeeper
                 return;
 
             var newRoute = await GetRoute(newData);
-            //得到旧的路由。
-            var oldRoute = _routes.FirstOrDefault(i => i.ServiceDescriptor.Id == newRoute.ServiceDescriptor.Id);
 
-            lock (_routes)
-            {
-                //删除旧路由，并添加上新的路由。
-                _routes =
-                    _routes
-                        .Where(i => i.ServiceDescriptor.Id != newRoute.ServiceDescriptor.Id)
-                        .Concat(new[] { newRoute }).ToArray();
+            if (_routes != null && _routes.Any() && newRoute != null)
+            {  //得到旧的路由。
+                var oldRoute = _routes.FirstOrDefault(i => i.ServiceDescriptor.Id == newRoute.ServiceDescriptor.Id);
+                if (newRoute.Address != null && newRoute.Address.Any())
+                {
+                  
+                    lock (_routes)
+                    {
+                        //删除旧路由，并添加上新的路由。
+                        _routes =
+                            _routes
+                                .Where(i => i.ServiceDescriptor.Id != newRoute.ServiceDescriptor.Id)
+                                .Concat(new[] { newRoute }).ToArray();
+                    }
+
+                    //触发路由变更事件。
+                    OnChanged(new ServiceRouteChangedEventArgs(newRoute, oldRoute));
+                }
+                else 
+                {
+                    lock (_routes)
+                    {
+                        _routes = _routes.Where(i => i.ServiceDescriptor.Id != newRoute.ServiceDescriptor.Id).ToArray();
+                    }
+                    OnRemoved(new ServiceRouteEventArgs(newRoute));
+                }
+                
             }
-
-            //触发路由变更事件。
-            OnChanged(new ServiceRouteChangedEventArgs(newRoute, oldRoute));
+          
         }
 
         public async Task ChildrenChange(string[] oldChildrens, string[] newChildrens)
@@ -394,21 +472,24 @@ namespace Surging.Core.Zookeeper
 
             //获取新增的路由信息。
             var newRoutes = (await GetRoutes(createdChildrens)).ToArray();
-
-            var routes = _routes.ToArray();
-            lock (_routes)
+            if (_routes != null && _routes.Any()) 
             {
-                _routes = _routes
-                    //删除无效的节点路由。
-                    .Where(i => !deletedChildrens.Contains(i.ServiceDescriptor.Id))
-                    //连接上新的路由。
-                    .Concat(newRoutes)
-                    .ToArray();
+                var routes = _routes.ToArray();
+                lock (_routes)
+                {
+                    _routes = _routes
+                        //删除无效的节点路由。
+                        .Where(i => !deletedChildrens.Contains(i.ServiceDescriptor.Id))
+                        //连接上新的路由。
+                        .Concat(newRoutes)
+                        .ToArray();
+                }
+                //需要删除的路由集合。
+                var deletedRoutes = routes.Where(i => deletedChildrens.Contains(i.ServiceDescriptor.Id)).ToArray();
+                //触发删除事件。
+                OnRemoved(deletedRoutes.Select(route => new ServiceRouteEventArgs(route)).ToArray());
             }
-            //需要删除的路由集合。
-            var deletedRoutes = routes.Where(i => deletedChildrens.Contains(i.ServiceDescriptor.Id)).ToArray();
-            //触发删除事件。
-            OnRemoved(deletedRoutes.Select(route => new ServiceRouteEventArgs(route)).ToArray());
+            
 
             //触发路由被创建事件。
             OnCreated(newRoutes.Select(route => new ServiceRouteEventArgs(route)).ToArray());
@@ -417,16 +498,25 @@ namespace Surging.Core.Zookeeper
                 _logger.LogInformation("路由数据更新成功。");
         }
 
+        private async Task<bool> IsNeedUpdateRoutes(int routeCount)
+        {
+            var commmadManager = ServiceLocator.GetService<IServiceCommandManager>();
+            var commands = await commmadManager.GetServiceCommandsAsync();
+            if (commands != null && commands.Any() && commands.Count() <= routeCount)
+            {
+                if (_logger.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Warning))
+                    _logger.LogWarning($"从数据中心获取到{routeCount}条路由信息,{commands.Count()}条服务命令信息,无需更新路由信息");
+                return false;
+            }
+            if (_logger.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Warning))
+                _logger.LogWarning($"从数据中心获取到{routeCount}条路由信息,{commands.Count()}条服务命令信息,需要更新路由信息");
+            return true;
+        }
+
 
         /// <summary>Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.</summary>
         public void Dispose()
         {
-        }
-
-        private async ValueTask<(ManualResetEvent, ZooKeeper)> GetZooKeeper()
-        {
-            var zooKeeper = await _zookeeperClientProvider.GetZooKeeper();
-            return zooKeeper;
         }
 
     }

@@ -16,8 +16,8 @@ namespace Surging.Core.Consul.Internal.Cluster.HealthChecks.Implementation
     {
         private readonly int _timeout = 1000;
         private readonly Timer _timer;
-        private readonly ConcurrentDictionary<ValueTuple<string, int>, MonitorEntry> _dictionary =
-    new ConcurrentDictionary<ValueTuple<string, int>, MonitorEntry>();
+        private readonly ConcurrentDictionary<Tuple<string, int>, MonitorEntry> _dictionary =
+    new ConcurrentDictionary<Tuple<string, int>, MonitorEntry>();
 
         #region Implementation of IHealthCheckService
         public DefaultHealthCheckService()
@@ -30,18 +30,18 @@ namespace Surging.Core.Consul.Internal.Cluster.HealthChecks.Implementation
             }, null, timeSpan, timeSpan);
         }
 
-        public async ValueTask<bool> IsHealth(AddressModel address)
+        public async Task<bool> IsHealth(AddressModel address)
         {
             var ipAddress = address as IpAddressModel;
             MonitorEntry entry;
-            var isHealth = !_dictionary.TryGetValue(new ValueTuple<string, int>(ipAddress.Ip, ipAddress.Port), out entry) ? await Check(address, _timeout) : entry.Health;
+            var isHealth = !_dictionary.TryGetValue(new Tuple<string, int>(ipAddress.Ip, ipAddress.Port), out entry) ? await Check(address, _timeout) : entry.Health;
             return isHealth;
         }
 
         public void Monitor(AddressModel address)
         {
             var ipAddress = address as IpAddressModel;
-            _dictionary.GetOrAdd(new ValueTuple<string, int>(ipAddress.Ip, ipAddress.Port), k => new MonitorEntry(address));
+            _dictionary.GetOrAdd(new Tuple<string, int>(ipAddress.Ip, ipAddress.Port), k => new MonitorEntry(address));
         }
 
         #region Implementation of IDisposable

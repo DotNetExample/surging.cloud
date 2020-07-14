@@ -68,7 +68,9 @@ namespace Surging.Core.Swagger
                     }
                     options.SwaggerDoc(info.Version, info);
                     if (swaggerOptions != null && swaggerOptions.IgnoreFullyQualified)
+                    {
                         options.IgnoreFullyQualified();
+                    }
                     options.GenerateSwaggerDoc(_serviceEntryProvider.GetALLEntries());
                     options.DocInclusionPredicateV2((docName, apiDesc) =>
                     {
@@ -84,7 +86,10 @@ namespace Surging.Core.Swagger
                     });
                     var xmlPaths = _serviceSchemaProvider.GetSchemaFilesPath();
                     foreach (var xmlPath in xmlPaths)
+                    {
                         options.IncludeXmlComments(xmlPath);
+                    }
+                    options.CustomSchemaIds((type) => type.FullName);
                 });
             }
         }

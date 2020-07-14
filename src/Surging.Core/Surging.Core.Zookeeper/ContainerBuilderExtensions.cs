@@ -166,10 +166,13 @@ namespace Surging.Core.Zookeeper
             if (option != null)
             {
                 var sessionTimeout = config.SessionTimeout.TotalSeconds;
+                var connectionTimeout = config.ConnectionTimeout.TotalSeconds;
                 Double.TryParse(option.SessionTimeout, out sessionTimeout);
+                Double.TryParse(option.ConnectionTimeout, out connectionTimeout);
                 config = new ConfigInfo(
                     option.ConnectionString,
                     TimeSpan.FromSeconds(sessionTimeout),
+                    TimeSpan.FromSeconds(connectionTimeout),
                     option.RoutePath ?? config.RoutePath,
                     option.SubscriberPath ?? config.SubscriberPath,
                     option.CommandPath ?? config.CommandPath,

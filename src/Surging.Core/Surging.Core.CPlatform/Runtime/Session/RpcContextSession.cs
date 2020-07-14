@@ -1,12 +1,11 @@
 ﻿using Newtonsoft.Json;
 using Surging.Core.CPlatform.Transport.Implementation;
+using System;
 
 namespace Surging.Core.CPlatform.Runtime.Session
 {
     public class RpcContextSession : SurgingSessionBase
     {
-        private const string PayloadKey = "payload";
-
         internal RpcContextSession()
         {
         }
@@ -15,21 +14,10 @@ namespace Surging.Core.CPlatform.Runtime.Session
         {
             get
             {
-                object payload = RpcContext.GetContext().GetAttachment(PayloadKey);
-                if (payload != null)
+                var userId = RpcContext.GetContext().GetAttachment("userId");
+                if (userId != null) 
                 {
-                    if (payload.GetType() == typeof(string))
-                    {
-                        dynamic payloadJObject = JsonConvert.DeserializeObject(payload.ToString());
-                        return payloadJObject.userId ?? payloadJObject.UserId;
-                    }
-                    else
-                    {
-                        dynamic payloadJObject = payload;
-                        return payloadJObject.userId ?? payloadJObject.UserId;
-                    }
-                    
-                    
+                    return Convert.ToInt64(userId);
                 }
                 return null;
             }
@@ -39,21 +27,10 @@ namespace Surging.Core.CPlatform.Runtime.Session
         {
             get
             {
-                object payload = RpcContext.GetContext().GetAttachment(PayloadKey);
-                if (payload != null)
+                var userName = RpcContext.GetContext().GetAttachment("userName");
+                if (userName != null) 
                 {
-                    if (payload.GetType() == typeof(string))
-                    {
-                        dynamic payloadJObject = JsonConvert.DeserializeObject(payload.ToString());
-                        return payloadJObject.userName ?? payloadJObject.UserName;
-                    }
-                    else
-                    {
-                        dynamic payloadJObject = payload;
-                        return payloadJObject.userName ?? payloadJObject.UserName;
-                    }
-
-
+                    return userName.ToString();
                 }
                 return null;
             }

@@ -17,14 +17,14 @@ namespace Surging.Core.CPlatform.Runtime.Client.HealthChecks
         /// </summary>
         /// <param name="address">地址模型。</param>
         /// <returns>一个任务。</returns>
-        void Monitor(AddressModel address);
+        Task Monitor(AddressModel address);
 
         /// <summary>
         /// 判断一个地址是否健康。
         /// </summary>
         /// <param name="address">地址模型。</param>
         /// <returns>健康返回true，否则返回false。</returns>
-        ValueTask<bool> IsHealth(AddressModel address);
+        Task<bool> IsHealth(AddressModel address);
 
         /// <summary>
         /// 标记一个地址为失败的。
@@ -33,10 +33,7 @@ namespace Surging.Core.CPlatform.Runtime.Client.HealthChecks
         /// <returns>一个任务。</returns>
         Task MarkFailure(AddressModel address);
 
-        Task MarkServiceRouteUnHealth(string serviceId,AddressModel address);
-
-        Task MarkServiceRouteHealth(string serviceId, AddressModel address);
-
+        Task MarkFailureForTimeOut(AddressModel address);
 
         event EventHandler<HealthCheckEventArgs> Removed;
 
