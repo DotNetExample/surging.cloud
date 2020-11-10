@@ -50,14 +50,6 @@
   "Automapper": {
     "Assemblies": "JingShOnline.*.Application;JingShOnline.*.Common;"
   },
-  "OssConfig": {
-    "Endpoint": "oss-cn-beijing.aliyuncs.com",
-    "Host": "http://cdn.dev.jingshonline.net/",
-    "Bucket": "jingshonline-dev",
-    "AccessKeyId": "LTAIk9eMYBg9swQB",
-    "AccessKeySecret": "JA4GPfW3bf2nHLcTPAdgG5aVw6i3ms",
-    "CallbackUrl": "http://fileserver.dev.jingshonline.net/v1/api/oss/callback"
-  },
   "Stage": {
     "EnableHttps": false, // 不设置ports，默认httpsPort:443
     "CertificateFileName": "${CertificateFileName}|",
